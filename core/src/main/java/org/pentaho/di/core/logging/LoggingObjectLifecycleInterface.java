@@ -2,7 +2,7 @@
  *
  * Pentaho Data Integration
  *
- * Copyright (C) 2016 - 2021 by Hitachi Vantara : http://www.pentaho.com
+ * Copyright (C) 2002-2021 by Hitachi Vantara : http://www.pentaho.com
  *
  *******************************************************************************
  *
@@ -20,17 +20,11 @@
  *
  ******************************************************************************/
 
-package org.pentaho.di.trans.steps.jsoninput.reader;
+package org.pentaho.di.core.logging;
 
-import org.pentaho.di.core.RowSet;
-import org.pentaho.di.core.exception.KettleException;
+public interface LoggingObjectLifecycleInterface {
 
-import java.io.InputStream;
+  default void callBeforeLog() { }
 
-public interface IJsonReader {
-
-  /**
-   * Parse compiled Json Paths into a rowset
-   */
-  RowSet parse( InputStream in ) throws KettleException;
+  default void callAfterLog() { }
 }
