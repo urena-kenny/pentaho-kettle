@@ -61,6 +61,7 @@ public class FastJsonReader implements IJsonReader {
 
   private final boolean defaultPathLeafToNull;
   private final boolean ignoreMissingPath;
+  private boolean includeNulls = false;
 
   private final JsonInput step;
 
@@ -73,6 +74,20 @@ public class FastJsonReader implements IJsonReader {
 
     this.defaultPathLeafToNull = defaultPathLeafToNull;
     this.ignoreMissingPath = ignoreMissingPath;
+    this.step = step;
+    this.log = log;
+
+    setJsonConfiguration( defaultPathLeafToNull );
+    setInputFields( inputFields );
+  }
+
+  public FastJsonReader( JsonInput step, JsonInputField[] inputFields, boolean defaultPathLeafToNull,
+                         boolean ignoreMissingPath, boolean includeNulls,
+                         LogChannelInterface log ) throws KettleException {
+
+    this.defaultPathLeafToNull = defaultPathLeafToNull;
+    this.ignoreMissingPath = ignoreMissingPath;
+    this.includeNulls = includeNulls;
     this.step = step;
     this.log = log;
 
@@ -137,14 +152,23 @@ public class FastJsonReader implements IJsonReader {
   public RowSet parse( InputStream in ) throws KettleException {
     readInput( in );
     List<List<?>> results = evalCombinedResult();
-    int len = results.isEmpty() ? 0 : results.get( 0 ).size();
+    int len = results.isEmpty() ? 0 : getMaxRowSize( results );
     if ( log.isDetailed() ) {
       log.logDetailed( BaseMessages.getString( PKG, "JsonInput.Log.NrRecords", len ) );
     }
     if ( len == 0 ) {
       return getEmptyResponse();
     }
-    return new TransposedRowSet( results );
+    return new TransposedRowSet( results, includeNulls );
+  }
+
+  /**
+   * Gets the max size of the result rows.
+   * @param results A list of lists representing the result rows
+   * @return the size of the largest row in the results
+   */
+  protected static int getMaxRowSize( List<List<?>> results ) {
+    return results.stream().mapToInt( List::size ).max().getAsInt();
   }
 
   private RowSet getEmptyResponse() {
@@ -159,14 +183,16 @@ public class FastJsonReader implements IJsonReader {
     private final int rowCount;
     private int rowNbr;
     /**
-     * if should skip null-only rows; size won't be exact if set
+     * if should skip null-only rows; size won't be exact if set.
      */
     private boolean cullNulls = true;
+    private boolean includeNulls; // Include null values in result set
 
-    public TransposedRowSet( List<List<?>> results ) {
+    public TransposedRowSet( List<List<?>> results, boolean includeNulls ) {
       super();
+      this.includeNulls = includeNulls;
       this.results = results;
-      this.rowCount = results.isEmpty() ? 0 : results.get( 0 ).size();
+      this.rowCount = results.isEmpty() ? 0 : FastJsonReader.getMaxRowSize( results );
     }
 
     @Override
@@ -186,7 +212,7 @@ public class FastJsonReader implements IJsonReader {
           }
           Object val = results.get( col ).get( rowNbr );
           rowData[ col ] = val;
-          allNulls &= val == null;
+          allNulls &= ( val == null && !includeNulls );
         }
         rowNbr++;
       } while ( allNulls );
