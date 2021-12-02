@@ -17,6 +17,7 @@
   <properties>
     <pdi-engine-spark.version>${project.version}</pdi-engine-spark.version>
     <rxjava.version>2.2.3</rxjava.version>
+    <pentaho-mongodb-plugin.version>9.3.0.0-SNAPSHOT</pentaho-mongodb-plugin.version>
 
     <pentaho-json.version>9.3.0.0-SNAPSHOT</pentaho-json.version>
     <pentaho-hadoop-shims.version>9.3.0.0-SNAPSHOT</pentaho-hadoop-shims.version>
@@ -54,7 +55,6 @@
     <kafka.spark.version>2.3.2</kafka.spark.version>
     <databricks.version>4.0.0</databricks.version>
     <bahir.version>2.3.2</bahir.version>
-    <snowflake-jdbc.version>3.6.28</snowflake-jdbc.version>
     <javax.servlet-api.version>3.1.0</javax.servlet-api.version>
     <jface.version>3.22.0</jface.version>
   </properties>
@@ -127,6 +127,21 @@
       </exclusions>
     </dependency>
 
+    <dependency>
+      <groupId>pentaho</groupId>
+      <artifactId>pentaho-mongodb-plugin</artifactId>
+      <version>${pentaho-mongodb-plugin.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>pentaho</groupId>
+      <artifactId>pentaho-mongo-utils</artifactId>
+      <version>${pentaho-mongodb-plugin.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.mongodb</groupId>
+      <artifactId>mongo-java-driver</artifactId>
+      <version>3.12.10</version>
+    </dependency>
     <!-- Updated Eclipse Dependencies -->
     <dependency>
       <groupId>org.eclipse.platform</groupId>
