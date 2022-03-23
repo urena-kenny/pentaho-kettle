@@ -46,10 +46,8 @@
   </licenses>
 
   <properties>
-    <maven.compiler.source>1.8</maven.compiler.source>
-    <maven.compiler.target>1.8</maven.compiler.target>
     <maven.build.timestamp.format>yyyy-MM-dd hh.mm.ss</maven.build.timestamp.format>
-    <maven-surefire-plugin.argLine>-Duser.timezone=UTC -Dfile.encoding=UTF-8 -Duser.language=en -Duser.country=US</maven-surefire-plugin.argLine>
+    <maven-surefire-plugin.argLine>-Duser.timezone=UTC -Dfile.encoding=UTF-8 -Duser.language=en -Duser.country=US -Djava.locale.providers=COMPAT,SPI</maven-surefire-plugin.argLine>
 
     <!-- License Configuration -->
     <license.licenseName>apache_v2</license.licenseName>
@@ -64,7 +62,6 @@
     <commons-beanutils.version>1.9.3</commons-beanutils.version>
     <guava.version>17.0</guava.version>
     <encoder.version>1.2</encoder.version>
-    <h2.version>1.2.131</h2.version>
     <wstx-asl.version>3.2.4</wstx-asl.version>
 
     <!-- Test dependencies -->
@@ -243,6 +240,18 @@
     <plugins>
       <plugin>
         <artifactId>maven-compiler-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <systemPropertyVariables>
+            <user.language>en</user.language>
+            <user.region>US</user.region>
+            <user.timezone>UTC</user.timezone>
+            <file.encoding>UTF-8</file.encoding>
+            <java.locale.providers>COMPAT,SPI</java.locale.providers>
+          </systemPropertyVariables>
+        </configuration>
       </plugin>
       <plugin>
         <artifactId>maven-jar-plugin</artifactId>

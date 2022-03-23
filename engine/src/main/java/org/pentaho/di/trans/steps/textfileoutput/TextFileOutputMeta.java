@@ -2,7 +2,7 @@
  *
  * Pentaho Data Integration
  *
- * Copyright (C) 2002-2021 by Hitachi Vantara : http://www.pentaho.com
+ * Copyright (C) 2002-2022 by Hitachi Vantara : http://www.pentaho.com
  *
  *******************************************************************************
  *
@@ -245,7 +245,7 @@ public class TextFileOutputMeta extends BaseFileOutputMeta implements StepMetaIn
   @Injection( name = "DO_NOT_CREATE_FILE_AT_STARTUP" )
   private boolean doNotOpenNewFileInit;
 
-  private ValueMetaInterface[] metaWithFieldOptions = null;
+  protected ValueMetaInterface[] metaWithFieldOptions = null;
 
   public TextFileOutputMeta() {
     super(); // allocate BaseStepMeta
@@ -638,12 +638,23 @@ public class TextFileOutputMeta extends BaseFileOutputMeta implements StepMetaIn
   @Override
   public Object clone() {
     TextFileOutputMeta retval = (TextFileOutputMeta) super.clone();
-    int nrfields = outputFields.length;
+    int nrFields = outputFields.length;
 
-    retval.allocate( nrfields );
+    retval.allocate( nrFields );
 
-    for ( int i = 0; i < nrfields; i++ ) {
-      retval.outputFields[i] = (TextFileField) outputFields[i].clone();
+    for ( int i = 0; i < nrFields; i++ ) {
+      retval.outputFields[ i ] = (TextFileField) outputFields[ i ].clone();
+    }
+
+    if ( null != metaWithFieldOptions ) {
+      int nrMetas = metaWithFieldOptions.length;
+
+      retval.metaWithFieldOptions = new ValueMetaInterface[ nrMetas ];
+      for ( int i = 0; i < nrMetas; i++ ) {
+        retval.metaWithFieldOptions[ i ] = metaWithFieldOptions[ i ].clone();
+      }
+    } else {
+      retval.metaWithFieldOptions = null;
     }
 
     return retval;
@@ -784,6 +795,7 @@ public class TextFileOutputMeta extends BaseFileOutputMeta implements StepMetaIn
     newline = getNewLine( fileFormat );
 
     allocate( 0 );
+    metaWithFieldOptions = null;
   }
 
   public String buildFilename( VariableSpace space, int stepnr, String partnr, int splitnr, boolean ziparchive ) {
@@ -1159,41 +1171,43 @@ public class TextFileOutputMeta extends BaseFileOutputMeta implements StepMetaIn
    *
    * @param data
    */
-  protected void calcMetaWithFieldOptions( TextFileOutputData data ) {
-    if ( getOutputFields() != null ) {
-      metaWithFieldOptions = new ValueMetaInterface[ getOutputFields().length ];
+  protected synchronized void calcMetaWithFieldOptions( TextFileOutputData data ) {
+    if ( null == metaWithFieldOptions ) {
+      if ( !Utils.isEmpty( getOutputFields() ) ) {
+        metaWithFieldOptions = new ValueMetaInterface[ getOutputFields().length ];
 
-      for ( int i = 0; i < getOutputFields().length; ++i ) {
-        ValueMetaInterface v = data.outputRowMeta.getValueMeta( data.fieldnrs[ i ] );
+        for ( int i = 0; i < getOutputFields().length; ++i ) {
+          ValueMetaInterface v = data.outputRowMeta.getValueMeta( data.fieldnrs[ i ] );
 
-        if ( v != null ) {
-          metaWithFieldOptions[ i ] = v.clone();
+          if ( v != null ) {
+            metaWithFieldOptions[ i ] = v.clone();
 
-          TextFileField field = getOutputFields()[ i ];
-          metaWithFieldOptions[ i ].setLength( field.getLength() );
-          metaWithFieldOptions[ i ].setPrecision( field.getPrecision() );
-          if ( !Utils.isEmpty( field.getFormat() ) ) {
-            metaWithFieldOptions[ i ].setConversionMask( field.getFormat() );
+            TextFileField field = getOutputFields()[ i ];
+            metaWithFieldOptions[ i ].setLength( field.getLength() );
+            metaWithFieldOptions[ i ].setPrecision( field.getPrecision() );
+            if ( !Utils.isEmpty( field.getFormat() ) ) {
+              metaWithFieldOptions[ i ].setConversionMask( field.getFormat() );
+            }
+            metaWithFieldOptions[ i ].setDecimalSymbol( field.getDecimalSymbol() );
+            metaWithFieldOptions[ i ].setGroupingSymbol( field.getGroupingSymbol() );
+            metaWithFieldOptions[ i ].setCurrencySymbol( field.getCurrencySymbol() );
+            metaWithFieldOptions[ i ].setTrimType( field.getTrimType() );
+            if ( !Utils.isEmpty( getEncoding() ) ) {
+              metaWithFieldOptions[ i ].setStringEncoding( getEncoding() );
+            }
+
+            // enable output padding by default to be compatible with v2.5.x
+            //
+            metaWithFieldOptions[ i ].setOutputPaddingEnabled( true );
           }
-          metaWithFieldOptions[ i ].setDecimalSymbol( field.getDecimalSymbol() );
-          metaWithFieldOptions[ i ].setGroupingSymbol( field.getGroupingSymbol() );
-          metaWithFieldOptions[ i ].setCurrencySymbol( field.getCurrencySymbol() );
-          metaWithFieldOptions[ i ].setTrimType( field.getTrimType() );
-          if ( !Utils.isEmpty( getEncoding() ) ) {
-            metaWithFieldOptions[ i ].setStringEncoding( getEncoding() );
-          }
-
-          // enable output padding by default to be compatible with v2.5.x
-          //
-          metaWithFieldOptions[ i ].setOutputPaddingEnabled( true );
         }
+      } else {
+        metaWithFieldOptions = null;
       }
-    } else {
-      metaWithFieldOptions = null;
     }
   }
 
-  protected ValueMetaInterface[] getMetaWithFieldOptions() {
+  protected synchronized ValueMetaInterface[] getMetaWithFieldOptions() {
     if ( null == metaWithFieldOptions ) {
       metaWithFieldOptions = new ValueMetaInterface[ 0 ];
     }

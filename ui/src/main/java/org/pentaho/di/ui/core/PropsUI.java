@@ -185,6 +185,10 @@ public class PropsUI extends Props {
     throw new RuntimeException( "Properties, Kettle systems settings, not initialised!" );
   }
 
+  private PropsUI( ) {
+    super( Props.TYPE_PROPERTIES_SPOON );
+  }
+
   private PropsUI( int t ) {
     super( t );
   }
