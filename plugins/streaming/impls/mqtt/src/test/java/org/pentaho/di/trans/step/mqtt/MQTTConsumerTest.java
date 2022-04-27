@@ -2,7 +2,7 @@
  *
  * Pentaho Data Integration
  *
- * Copyright (C) 2019-2021 by Hitachi Vantara : http://www.pentaho.com
+ * Copyright (C) 2019-2022 by Hitachi Vantara : http://www.pentaho.com
  *
  *******************************************************************************
  *
@@ -36,6 +36,7 @@ import org.pentaho.di.core.logging.LogChannelInterface;
 import org.pentaho.di.core.logging.LogChannelInterfaceFactory;
 import org.pentaho.di.core.plugins.PluginRegistry;
 import org.pentaho.di.core.plugins.StepPluginType;
+import org.pentaho.di.core.util.StringUtil;
 import org.pentaho.di.trans.Trans;
 import org.pentaho.di.trans.TransMeta;
 
@@ -71,6 +72,9 @@ public class MQTTConsumerTest {
     MockitoAnnotations.initMocks( this );
     KettleLogStore.setLogChannelInterfaceFactory( logChannelFactory );
     when( logChannelFactory.create( any(), any() ) ).thenReturn( logChannel );
+    when( logChannelFactory.create( any() ) ).thenReturn( logChannel );
+    // Line below added to avoid `org.mockito.exceptions.misusing.UnnecessaryStubbingException` from being thrown
+    logChannelFactory.create( StringUtil.EMPTY_STRING );
 
     TransMeta transMeta = new TransMeta( getClass().getResource( "/ConsumeRows.ktr" ).getPath() );
     trans = new Trans( transMeta );
