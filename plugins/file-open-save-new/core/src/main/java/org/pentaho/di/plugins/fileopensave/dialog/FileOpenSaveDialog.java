@@ -22,54 +22,69 @@
 
 package org.pentaho.di.plugins.fileopensave.dialog;
 
-import org.apache.commons.lang.StringUtils;
-import org.apache.http.NameValuePair;
-import org.apache.http.client.utils.URLEncodedUtils;
-import org.apache.http.message.BasicNameValuePair;
+import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.IntStream;
+
+import org.eclipse.jface.dialogs.Dialog;
+import org.eclipse.jface.viewers.ArrayContentProvider;
+import org.eclipse.jface.viewers.ColumnLabelProvider;
+import org.eclipse.jface.viewers.IStructuredSelection;
+import org.eclipse.jface.viewers.ITreeContentProvider;
+import org.eclipse.jface.viewers.LabelProvider;
+import org.eclipse.jface.viewers.TableViewer;
+import org.eclipse.jface.viewers.TableViewerColumn;
+import org.eclipse.jface.viewers.TreeViewer;
 import org.eclipse.swt.SWT;
-import org.eclipse.swt.browser.BrowserFunction;
+import org.eclipse.swt.custom.CLabel;
+import org.eclipse.swt.custom.SashForm;
+import org.eclipse.swt.events.MouseEvent;
+import org.eclipse.swt.events.MouseTrackAdapter;
+import org.eclipse.swt.graphics.Color;
+import org.eclipse.swt.graphics.Font;
+import org.eclipse.swt.graphics.FontData;
 import org.eclipse.swt.graphics.Image;
+import org.eclipse.swt.graphics.Point;
+import org.eclipse.swt.graphics.Rectangle;
+import org.eclipse.swt.layout.FormLayout;
+import org.eclipse.swt.layout.GridData;
+import org.eclipse.swt.layout.GridLayout;
+import org.eclipse.swt.layout.RowData;
+import org.eclipse.swt.layout.RowLayout;
+import org.eclipse.swt.widgets.Composite;
+import org.eclipse.swt.widgets.Control;
+import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
-import org.json.simple.JSONObject;
-import org.json.simple.parser.JSONParser;
-import org.json.simple.parser.ParseException;
+import org.eclipse.swt.widgets.Text;
 import org.pentaho.di.core.Const;
+import org.pentaho.di.core.SwtUniversalImage;
 import org.pentaho.di.core.logging.LogChannelInterface;
-import org.pentaho.di.core.util.Utils;
 import org.pentaho.di.i18n.BaseMessages;
 import org.pentaho.di.plugins.fileopensave.api.file.FileDetails;
+import org.pentaho.di.plugins.fileopensave.api.providers.Directory;
+import org.pentaho.di.plugins.fileopensave.api.providers.File;
+import org.pentaho.di.plugins.fileopensave.api.providers.Tree;
+import org.pentaho.di.plugins.fileopensave.api.providers.exception.FileException;
+import org.pentaho.di.plugins.fileopensave.cache.FileCache;
+import org.pentaho.di.plugins.fileopensave.controllers.FileController;
+import org.pentaho.di.plugins.fileopensave.providers.ProviderService;
+import org.pentaho.di.plugins.fileopensave.providers.local.LocalFileProvider;
 import org.pentaho.di.ui.core.FileDialogOperation;
-import org.pentaho.di.ui.core.dialog.ThinDialog;
-import org.pentaho.di.ui.core.gui.GUIResource;
+import org.pentaho.di.ui.core.FormDataBuilder;
+import org.pentaho.di.ui.core.PropsUI;
 import org.pentaho.di.ui.util.HelpUtils;
-import org.pentaho.platform.settings.ServerPort;
-import org.pentaho.platform.settings.ServerPortRegistry;
-import org.eclipse.swt.browser.Browser;
+import org.pentaho.di.ui.util.SwtSvgImageUtil;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.URLEncoder;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Properties;
-
-/**
- * Created by bmorrise on 5/23/17.
- */
-public class FileOpenSaveDialog extends ThinDialog implements FileDetails {
+public class FileOpenSaveDialog extends Dialog implements FileDetails {
   private static final Class<?> PKG = FileOpenSaveDialog.class;
 
   public static final String STATE_SAVE = "save";
   public static final String STATE_OPEN = "open";
   public static final String SELECT_FOLDER = "selectFolder";
-  private Image LOGO = GUIResource.getInstance().getImageLogoSmall();
-  private static final String OSGI_SERVICE_PORT = "OSGI_SERVICE_PORT";
+  // private Image LOGO = GUIResource.getInstance().getImageLogoSmall();
   private static final int OPTIONS = SWT.APPLICATION_MODAL | SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MAX;
-  private static final String THIN_CLIENT_HOST = "THIN_CLIENT_HOST";
-  private static final String THIN_CLIENT_PORT = "THIN_CLIENT_PORT";
-  private static final String LOCALHOST = "127.0.0.1";
   private static final String HELP_URL =
-    Const.getDocUrl( "Products/Work_with_transformations#Open_a_transformation" );
+      Const.getDocUrl( "Products/Work_with_transformations#Open_a_transformation" );
 
   public static final String PATH_PARAM = "path";
   public static final String USE_SCHEMA_PARAM = "useSchema";
@@ -96,173 +111,317 @@ public class FileOpenSaveDialog extends ThinDialog implements FileDetails {
   private String provider;
 
   private LogChannelInterface log;
+  private int width;
+  private int height;
 
-  public FileOpenSaveDialog( Shell shell, int width, int height, LogChannelInterface logger ) {
-    super( shell, width, height );
-    this.log = logger;
+  private static final FileController FILE_CONTROLLER;
+
+  static {
+    LocalFileProvider localProvider = new LocalFileProvider();
+    ProviderService providerService = new ProviderService( Arrays.asList( localProvider, localProvider ) );
+    FILE_CONTROLLER = new FileController( new FileCache(), providerService );
   }
 
-  private void addParameter( List<NameValuePair> parameters, String name, String value ) {
-    if ( !Utils.isEmpty( value ) ) {
-      parameters.add( new BasicNameValuePair( name, value ) );
-    }
+  public FileOpenSaveDialog( Shell parentShell, int width, int height, LogChannelInterface logger ) {
+    super( parentShell );
+    this.log = logger;
+    this.width = width;
+    this.height = height;
+    setShellStyle( OPTIONS );
   }
 
   public void open( FileDialogOperation fileDialogOperation ) {
 
-    String dialogPath = fileDialogOperation.getPath() != null
-      ? fileDialogOperation.getPath()
-      : fileDialogOperation.getStartDir();
-
-    try {
-      dialogPath = URLEncoder.encode( dialogPath, "UTF-8" );
-    } catch ( Exception e ) {
-      // ignore if fails
-    }
-
-    StringBuilder clientPath = new StringBuilder();
-    String cmd = fileDialogOperation.getCommand();
-
-    clientPath.append( getClientPath() );
-    clientPath.append( !Utils.isEmpty( cmd ) ? "#!/" + cmd : "" );
-
-    List<NameValuePair> parameters = new ArrayList<>();
-    addParameter( parameters, PATH_PARAM, dialogPath );
-    addParameter( parameters, CONNECTION_PARAM, fileDialogOperation.getConnection() );
-    addParameter( parameters, PROVIDER_PARAM, fileDialogOperation.getProvider() );
-    addParameter( parameters, PROVIDER_FILTER_PARAM, fileDialogOperation.getProviderFilter() );
-    addParameter( parameters, FILTER_PARAM, fileDialogOperation.getFilter() );
-    addParameter( parameters, DEFAULT_FILTER_PARAM, fileDialogOperation.getDefaultFilter() );
-    addParameter( parameters, ORIGIN_PARAM, fileDialogOperation.getOrigin() );
-    addParameter( parameters, FILENAME_PARAM, fileDialogOperation.getFilename() );
-    addParameter( parameters, FILE_TYPE_PARM, fileDialogOperation.getFileType() );
-    addParameter( parameters, CONNECTION_FILTER_PARAM, fileDialogOperation.getConnectionTypeFilter()  );
-
-    if ( fileDialogOperation.getUseSchemaPath() ) {
-      addParameter( parameters, USE_SCHEMA_PARAM, "true" );
-    }
-
-    String queryParams = URLEncodedUtils.format( parameters, "UTF-8" );
-    clientPath.append( "?" ).append( queryParams );
-
-    String title = Utils.isEmpty( cmd ) ? "" : BaseMessages.getString( PKG,
-      ( "FileOpenSaveDialog.dialog." + cmd + ".title" ) );
-
-    super.createDialog( fileDialogOperation.getTitle() != null ? fileDialogOperation.getTitle()
-        : StringUtils.capitalize( title ), getRepoURL( clientPath.toString() ), OPTIONS, LOGO );
-    super.dialog.setMinimumSize( 545, 458 );
-
-    new BrowserFunction( browser, "close" ) {
-      @Override public Object function( Object[] arguments ) {
-        if ( Const.isRunningOnWebspoonMode() ) {
-          Runnable execute = () -> closeBrowser( browser );
-          display.asyncExec( execute );
-        } else {
-          closeBrowser( browser );
-        }
-        return true;
-      }
-    };
-
-    new BrowserFunction( browser, "select" ) {
-      @Override public Object function( Object[] arguments ) {
-        if ( Const.isRunningOnWebspoonMode() ) {
-          Runnable execute = () -> closeBrowserWithParameters( arguments );
-          display.asyncExec( execute );
-        } else {
-          closeBrowserWithParameters( arguments );
-        }
-        return true;
-      }
-    };
-
-    new BrowserFunction( browser, "help" ) {
-      @Override public Object function( Object[]  arguments ) {
-        openHelpDialog();
-        return true;
-      }
-    };
-
-    while ( !dialog.isDisposed() ) {
-      if ( !display.readAndDispatch() ) {
-        display.sleep();
-      }
-    }
   }
 
-  private void closeBrowserWithParameters( Object[] arguments ) {
-    try {
-      setProperties( arguments );
-      closeBrowser( browser );
-    } catch ( Exception e ) {
-      log.logError( "Error in processing select() from file-open-save app: ", e );
-    }
+  @Override
+  protected void configureShell( Shell newShell ) {
+    // newShell.setImage( LOGO );
+    newShell.setText( "Command Line" );
+    PropsUI.getInstance().setLook( newShell );
+    newShell.setMinimumSize( 545, 458 );
   }
 
-  private void closeBrowser( Browser browser ) {
-    browser.dispose();
-    dialog.close();
-    dialog.dispose();
+  @Override
+  protected Point getInitialSize() {
+    return new Point( width, height );
+  }
+
+  @Override
+  protected Control createContents( Composite parent ) {
+    FormLayout formLayout = new FormLayout();
+    formLayout.marginTop = 20;
+    formLayout.marginBottom = 25;
+
+    parent.setLayout( formLayout );
+    Composite header = createHeader( parent );
+    header.setLayoutData( new FormDataBuilder().top( 0, 0 ).left( 0, 0 ).right( 100, 0 ).result() );
+    Composite buttons = createButtonsBar( parent );
+    buttons.setLayoutData( new FormDataBuilder().top( header, 25 ).left( 0, 0 ).right( 100, 0 ).result() );
+
+    FlatButton helpButton =
+        new FlatButton( parent, SWT.NONE )
+            .setEnabledImage( rasterImage( "img/help.svg", 24, 24 ) )
+            .setDisabledImage( rasterImage( "img/help.svg", 24, 24 ) )
+            .setEnabled( true )
+            .setLayoutData( new FormDataBuilder().bottom( 100, 0 ).left( 0, 20 ).result() );
+    helpButton.getLabel().setText( "Help" );
+
+    Composite select = createFilesBrowser( parent );
+    select.setLayoutData( new FormDataBuilder().top( buttons, 15 ).left( 0, 0 ).right( 100, 0 )
+        .bottom( helpButton.getLabel(), -20 ).result() );
+
+    return parent;
+  }
+
+  public Composite createHeader( Composite parent ) {
+    Composite headerComposite = new Composite( parent, SWT.NONE );
+
+    FormLayout formLayout = new FormLayout();
+    formLayout.marginLeft = 20;
+    formLayout.marginRight = 20;
+
+    headerComposite.setLayout( formLayout );
+    PropsUI.getInstance().setLook( headerComposite );
+
+    Label lblSelect = new Label( headerComposite, SWT.LEFT );
+    PropsUI.getInstance().setLook( lblSelect );
+
+    // TODO: Set text dynamically
+    lblSelect.setText( "Select a file or folder" );
+
+    FontData[] fontData = lblSelect.getFont().getFontData();
+    Arrays.stream( fontData ).forEach( fd -> fd.height = 20 );
+    final Font bigFont = new Font( getShell().getDisplay(), fontData );
+    lblSelect.setFont( bigFont );
+    lblSelect.addDisposeListener( ( e ) -> bigFont.dispose() );
+    lblSelect.setLayoutData( new FormDataBuilder().result() );
+
+    // TODO: A whole bunch more with search function
+    final Color WHITE = new Color( getShell().getDisplay(), 255, 255, 255 );
+    Composite searchComp = new Composite( headerComposite, SWT.BORDER );
+    PropsUI.getInstance().setLook( searchComp );
+    searchComp.addDisposeListener( ( e ) -> WHITE.dispose() );
+    searchComp.setLayoutData( new FormDataBuilder().right( 100, 0 ).result() );
+    searchComp.setBackground( WHITE );
+
+    RowLayout searchLayout = new RowLayout();
+    searchLayout.center = true;
+    searchComp.setLayout( searchLayout );
+
+    Label lblSearch = new Label( searchComp, SWT.NONE );
+    PropsUI.getInstance().setLook( lblSearch );
+    lblSearch.setLayoutData( new RowData() );
+    lblSearch.setBackground( WHITE );
+    lblSearch.setImage( rasterImage( "img/Search.S_D.svg", 25, 25 ) );
+
+    RowData rd = new RowData();
+    rd.width = 200;
+    Text txtSearch = new Text( searchComp, SWT.NONE );
+    PropsUI.getInstance().setLook( txtSearch );
+    txtSearch.setBackground( WHITE );
+    txtSearch.setLayoutData( rd );
+
+    headerComposite.layout();
+
+    return headerComposite;
+  }
+
+  private Composite createButtonsBar( Composite parent ) {
+    Composite buttons = new Composite( parent, SWT.NONE );
+    PropsUI.getInstance().setLook( buttons );
+
+    FormLayout formLayout = new FormLayout();
+    formLayout.marginLeft = 20;
+    formLayout.marginRight = 20;
+    buttons.setLayout( formLayout );
+
+    FlatButton backButton =
+        new FlatButton( buttons, SWT.NONE )
+            .setEnabledImage( rasterImage( "img/Backwards.S_D.svg", 32, 32 ) )
+            .setDisabledImage( rasterImage( "img/Backwards.S_D_disabled.svg", 32, 32 ) )
+            .setToolTipText( BaseMessages.getString( PKG, "file-open-save-plugin.app.back.button" ) )
+            .setEnabled( false );
+    FlatButton forwardButton =
+        new FlatButton( buttons, SWT.NONE )
+            .setEnabledImage( rasterImage( "img/Forwards.S_D.svg", 32, 32 ) )
+            .setDisabledImage( rasterImage( "img/Forwards.S_D_disabled.svg", 32, 32 ) )
+            .setToolTipText( BaseMessages.getString( PKG, "file-open-save-plugin.app.forward.button" ) )
+            .setEnabled( true )
+            .setLayoutData( new FormDataBuilder().left( backButton.getLabel(), 0 ).result() );
+
+    Composite fileButtons = new Composite( buttons, SWT.NONE );
+    PropsUI.getInstance().setLook( fileButtons );
+    fileButtons.setLayout( new RowLayout() );
+    fileButtons.setLayoutData( new FormDataBuilder().right( 100, 0 ).result() );
+
+    FlatButton upButton =
+        new FlatButton( fileButtons, SWT.NONE )
+            .setEnabledImage( rasterImage( "img/Up_Folder.S_D.svg", 32, 32 ) )
+            .setDisabledImage( rasterImage( "img/Up_Folder.S_D_disabled.svg", 32, 32 ) )
+            .setToolTipText( BaseMessages.getString( PKG, "file-open-save-plugin.app.up-directory.button" ) )
+
+            .setLayoutData( new RowData() )
+            .setEnabled( true );
+
+    FlatButton addButton =
+        new FlatButton( fileButtons, SWT.NONE )
+            .setEnabledImage( rasterImage( "img/New_Folder.S_D.svg", 32, 32 ) )
+            .setDisabledImage( rasterImage( "img/New_Folder.S_D_disabled.svg", 32, 32 ) )
+            .setToolTipText( BaseMessages.getString( PKG, "file-open-save-plugin.app.add-folder.button" ) )
+            .setLayoutData( new RowData() )
+            .setEnabled( false );
+
+    FlatButton deleteButton =
+        new FlatButton( fileButtons, SWT.NONE )
+            .setEnabledImage( rasterImage( "img/Close.S_D.svg", 32, 32 ) )
+            .setDisabledImage( rasterImage( "img/Close.S_D_disabled.svg", 32, 32 ) )
+            .setToolTipText( BaseMessages.getString( PKG, "file-open-save-plugin.app.delete.button" ) )
+            .setLayoutData( new RowData() )
+            .setEnabled( false );
+
+    FlatButton refreshButton =
+        new FlatButton( fileButtons, SWT.NONE )
+            .setEnabledImage( rasterImage( "img/Refresh.S_D.svg", 32, 32 ) )
+            .setDisabledImage( rasterImage( "img/Refresh.S_D_disabled.svg", 32, 32 ) )
+            .setToolTipText( BaseMessages.getString( PKG, "file-open-save-plugin.app.refresh.button" ) )
+            .setLayoutData( new RowData() )
+            .setEnabled( true );
+
+    Composite navComposite = new Composite( buttons, SWT.BORDER );
+    PropsUI.getInstance().setLook( navComposite );
+    navComposite.setBackground( getShell().getDisplay().getSystemColor( SWT.COLOR_WHITE ) );
+    navComposite.setLayoutData(
+      new FormDataBuilder().left( forwardButton.getLabel(), 10 ).right( fileButtons, -10 ).height( 32 ).result() );
+
+    return buttons;
+  }
+
+  private Composite createFilesBrowser( Composite parent ) {
+    Composite browser = new Composite( parent, SWT.NONE );
+    PropsUI.getInstance().setLook( browser );
+    GridLayout gridLayout = new GridLayout();
+    gridLayout.marginRight = 0;
+    gridLayout.marginLeft = 0;
+    browser.setLayout( gridLayout );
+
+    SashForm sashForm = new SashForm( browser, SWT.HORIZONTAL );
+    PropsUI.getInstance().setLook( sashForm );
+    sashForm.setLayoutData( new GridData( SWT.FILL, SWT.FILL, true, true ) );
+
+    TreeViewer treeViewer = new TreeViewer( sashForm, SWT.BORDER | SWT.V_SCROLL | SWT.H_SCROLL | SWT.FULL_SELECTION );
+    PropsUI.getInstance().setLook( treeViewer.getTree() );
+
+    
+    Image imgFolder = rasterImage( "img/file_icons/Archive.S_D.svg", 25, 25 );
+    Image imgDisk = rasterImage( "img/Disk.S_D.svg", 25, 25 );
+    
+    treeViewer.setLabelProvider( new LabelProvider() {
+      @Override
+      public String getText( Object element ) {
+        if ( element instanceof Tree ) {
+          return ( (Tree) element ).getName();
+        } else if ( element instanceof Directory ) {
+          return ( (Directory) element ).getName();
+        } else if ( element instanceof File ) {
+          return ( (File) element ).getName();
+        }
+        return null;
+      }
+
+      @Override
+      public Image getImage( Object element ) {
+        if( element instanceof Tree ) {
+          return imgDisk; 
+        } else if( element instanceof Directory ) {
+          return imgFolder;
+        }
+        return null;
+      }
+    } );
+
+    treeViewer.setContentProvider( new FileTreeContentProvider( FILE_CONTROLLER ) );
+    treeViewer.setInput( "Dummy" );
+    treeViewer.refresh();
+
+    treeViewer.addDoubleClickListener( e -> {
+      IStructuredSelection selection = (IStructuredSelection) e.getSelection();
+      Object selectedNode = selection.getFirstElement();
+      treeViewer.setExpandedState( selectedNode, !treeViewer.getExpandedState( selectedNode ) );
+    });
+    
+    
+    TableViewer tableViewer = new TableViewer( sashForm, SWT.BORDER | SWT.V_SCROLL | SWT.FULL_SELECTION );
+    PropsUI.getInstance().setLook( tableViewer.getTable() );
+    tableViewer.getTable().setHeaderVisible( true );;
+
+    TableViewerColumn tvcName = new TableViewerColumn( tableViewer, SWT.NONE );
+    tvcName.getColumn().setText( BaseMessages.getString( PKG, "file-open-save-plugin.files.name.header" ) );
+    tvcName.getColumn().setWidth( 250 );
+
+   
+
+    ColumnLabelProvider clp = new ColumnLabelProvider() {
+
+      @Override
+      public String getText( Object element ) {
+
+        return element.toString();
+      }
+
+      @Override
+      public Image getImage( Object element ) {
+        return imgFolder;
+      }
+
+    };
+
+    tvcName.setLabelProvider( clp );
+
+    TableViewerColumn tvcType = new TableViewerColumn( tableViewer, SWT.NONE );
+    tvcType.getColumn().setText( BaseMessages.getString( PKG, "file-open-save-plugin.files.type.header" ) );
+    tvcType.getColumn().setWidth( 80 );
+    tvcType.getColumn().setResizable( false );
+    tvcType.setLabelProvider( clp );
+
+    TableViewerColumn tvcModified = new TableViewerColumn( tableViewer, SWT.NONE );
+    tvcModified.getColumn().setText( BaseMessages.getString( PKG, "file-open-save-plugin.files.modified.header" ) );
+    tvcModified.getColumn().setWidth( 110 );
+    tvcModified.getColumn().setResizable( false );
+
+    tvcModified.setLabelProvider( clp );
+
+    tableViewer.getTable().addListener( SWT.Resize, ( e ) -> {
+      Rectangle r = tableViewer.getTable().getClientArea();
+      tvcName.getColumn()
+          .setWidth( Math.max( 150, r.width - tvcType.getColumn().getWidth() - tvcModified.getColumn().getWidth() ) );
+
+    } );
+
+    tableViewer.setContentProvider( ArrayContentProvider.getInstance() );
+
+    Object[] entries = IntStream.range( 0, 100 ).mapToObj( i -> new Integer( i ) ).toArray();
+    tableViewer.setInput( entries );
+
+    sashForm.setWeights( new int[] {
+      1, 2 } );
+
+    return browser;
+  }
+
+  private Image rasterImage( String path, int width, int height ) {
+    SwtUniversalImage img =
+        SwtSvgImageUtil.getUniversalImage( getShell().getDisplay(), getClass().getClassLoader(), path );
+    Image image = img.getAsBitmapForSize( getShell().getDisplay(), width, height );
+    getShell().addDisposeListener( ( e ) -> {
+      img.dispose();
+      image.dispose();
+    } );
+    return image;
   }
 
   private void openHelpDialog() {
-    HelpUtils.openHelpDialog( this.dialog, "", HELP_URL );
-  }
-
-  private void setProperties( Object[] arguments ) throws ParseException {
-    if ( arguments.length == 1 ) {
-      String jsonString = (String) arguments[ 0 ];
-      JSONParser jsonParser = new JSONParser();
-      JSONObject jsonObject = (JSONObject) jsonParser.parse( jsonString );
-      objectId = (String) jsonObject.get( OBJECT_ID_PARAM );
-      name = (String) jsonObject.get( NAME_PARAM );
-      path = (String) jsonObject.get( PATH_PARAM );
-      parentPath = (String) jsonObject.get( PARENT_PARAM );
-      connection = (String) jsonObject.get( CONNECTION_PARAM );
-      provider = (String) jsonObject.get( PROVIDER_PARAM );
-      type = (String) jsonObject.get( TYPE_PARAM );
-    }
-  }
-
-  private static String getClientPath() {
-    Properties properties = new Properties();
-    try ( InputStream inputStream = FileOpenSaveDialog.class.getClassLoader()
-      .getResourceAsStream( "project.properties" ) ) {
-      properties.load( inputStream );
-    } catch ( IOException e ) {
-      e.printStackTrace();
-    }
-    return properties.getProperty( "CLIENT_PATH" );
-  }
-
-  private static Integer getOsgiServicePort() {
-    // if no service port is specified try getting it from
-    ServerPort osgiServicePort = ServerPortRegistry.getPort( OSGI_SERVICE_PORT );
-    if ( osgiServicePort != null ) {
-      return osgiServicePort.getAssignedPort();
-    }
-    return null;
-  }
-
-  private static String getRepoURL( String path ) {
-    if ( Const.isRunningOnWebspoonMode() ) {
-      return System.getProperty( "KETTLE_CONTEXT_PATH", "" ) + "/osgi" + path;
-    }
-    String host;
-    Integer port;
-    try {
-      host = getKettleProperty( THIN_CLIENT_HOST );
-      port = Integer.valueOf( getKettleProperty( THIN_CLIENT_PORT ) );
-    } catch ( Exception e ) {
-      host = LOCALHOST;
-      port = getOsgiServicePort();
-    }
-    return "http://" + host + ":" + port + path;
-  }
-
-  private static String getKettleProperty( String propertyName ) {
-    // loaded in system properties at startup
-    return System.getProperty( propertyName );
+    HelpUtils.openHelpDialog( getShell(), "", HELP_URL );
   }
 
   public String getObjectId() {
@@ -320,4 +479,168 @@ public class FileOpenSaveDialog extends ThinDialog implements FileDetails {
   public void setParentPath( String parentPath ) {
     this.parentPath = parentPath;
   }
+
+  protected static class FlatButton {
+
+    private CLabel label;
+
+    private AtomicBoolean enabled = new AtomicBoolean( true );
+
+    private Color hoverColor;
+    private Image enabledImage;
+    private Image disabledImage;
+
+    public FlatButton( Composite parent, int style ) {
+      label = new CLabel( parent, style );
+      PropsUI.getInstance().setLook( label );
+      setEnabled( true );
+      setHoverColor( parent.getDisplay().getSystemColor( SWT.COLOR_GRAY ) );
+
+      label.addMouseTrackListener( new MouseTrackAdapter() {
+
+        private Color origColor;
+
+        @Override
+        public void mouseEnter( MouseEvent arg0 ) {
+          origColor = label.getBackground();
+          if ( enabled.get() ) {
+            label.setBackground( hoverColor );
+          }
+        }
+
+        @Override
+        public void mouseExit( MouseEvent e ) {
+          if ( origColor != null ) {
+            label.setBackground( origColor );
+          }
+        }
+
+      } );
+    }
+
+    public CLabel getLabel() {
+      return label;
+    }
+
+    public boolean isEnabled() {
+      return enabled.get();
+    }
+
+    public FlatButton setEnabled( boolean enabled ) {
+
+      if ( disabledImage != null && enabledImage != null ) {
+        label.setImage( enabled ? enabledImage : disabledImage );
+      } else if ( enabledImage != null && disabledImage == null ) {
+        label.setImage( enabledImage );
+      } else if ( enabledImage == null && disabledImage != null ) {
+        label.setImage( disabledImage );
+      }
+      label.redraw();
+
+      this.enabled.set( enabled );
+      return this;
+
+    }
+
+    public Image getEnabledImage() {
+      return enabledImage;
+    }
+
+    public FlatButton setEnabledImage( Image enabledImage ) {
+      this.enabledImage = enabledImage;
+      return this;
+    }
+
+    public Image getDisabledImage() {
+      return disabledImage;
+    }
+
+    public FlatButton setDisabledImage( Image disabledImage ) {
+      this.disabledImage = disabledImage;
+      return this;
+    }
+
+    public FlatButton setToolTipText( String toolTipText ) {
+      label.setToolTipText( toolTipText );
+      return this;
+    }
+
+    public Color getHoverColor() {
+      return hoverColor;
+    }
+
+    public FlatButton setHoverColor( Color hoverColor ) {
+      this.hoverColor = hoverColor;
+      return this;
+    }
+
+    public FlatButton setLayoutData( Object o ) {
+      label.setLayoutData( o );
+      return this;
+    }
+
+  }
+
+  protected static class FileTreeContentProvider implements ITreeContentProvider {
+
+    private final FileController fileController;
+
+    public FileTreeContentProvider( FileController fileController ) {
+      this.fileController = fileController;
+    }
+
+    @Override
+    public Object[] getElements( Object inputElement ) {
+      System.out.println( "here " + inputElement );
+      if ( inputElement.equals( "Dummy" ) ) {
+        Object[] results = fileController.load( "" ).toArray();
+        for ( Object o : results ) {
+          System.out.println( o );
+        }
+        return results;
+
+      } else if ( inputElement instanceof Tree ) {
+
+        Tree tree = (Tree) inputElement;
+
+      }
+      return null;
+    }
+
+    @Override
+    public Object[] getChildren( Object parentElement ) {
+      System.out.println( "Get Children "  + parentElement ); 
+      if ( parentElement instanceof Tree ) {
+        return ( (Tree) parentElement ).getChildren().toArray();
+      } else if ( parentElement instanceof Directory ) {
+        try {
+          return fileController.getFiles( (Directory) parentElement, "", true ).toArray();
+        } catch ( FileException e ) {
+          // TODO Auto-generated catch block
+          e.printStackTrace();
+        }
+      }
+
+      return new Object[0];
+    }
+
+    @Override
+    public Object getParent( Object element ) {
+
+      // TODO Auto-generated method stub
+      return null;
+    }
+
+    @Override
+    public boolean hasChildren( Object element ) {
+      if ( element instanceof Tree ) {
+        return ( (Tree) element ).isHasChildren();
+      } else if ( element instanceof Directory ) {
+        return ( (Directory) element ).isHasChildren();
+      }
+      return false;
+    }
+
+  }
+
 }
