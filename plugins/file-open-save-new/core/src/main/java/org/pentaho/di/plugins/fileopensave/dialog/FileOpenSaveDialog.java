@@ -22,16 +22,21 @@
 
 package org.pentaho.di.plugins.fileopensave.dialog;
 
+import java.text.SimpleDateFormat;
 import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.IntStream;
 
+import org.apache.commons.lang.StringUtils;
 import org.eclipse.jface.dialogs.Dialog;
 import org.eclipse.jface.viewers.ArrayContentProvider;
 import org.eclipse.jface.viewers.ColumnLabelProvider;
+import org.eclipse.jface.viewers.ISelection;
 import org.eclipse.jface.viewers.IStructuredSelection;
 import org.eclipse.jface.viewers.ITreeContentProvider;
 import org.eclipse.jface.viewers.LabelProvider;
+import org.eclipse.jface.viewers.StructuredSelection;
 import org.eclipse.jface.viewers.TableViewer;
 import org.eclipse.jface.viewers.TableViewerColumn;
 import org.eclipse.jface.viewers.TreeViewer;
@@ -64,16 +69,27 @@ import org.pentaho.di.plugins.fileopensave.api.file.FileDetails;
 import org.pentaho.di.plugins.fileopensave.api.providers.Directory;
 import org.pentaho.di.plugins.fileopensave.api.providers.File;
 import org.pentaho.di.plugins.fileopensave.api.providers.Tree;
+import org.pentaho.di.plugins.fileopensave.api.providers.Utils;
 import org.pentaho.di.plugins.fileopensave.api.providers.exception.FileException;
 import org.pentaho.di.plugins.fileopensave.cache.FileCache;
 import org.pentaho.di.plugins.fileopensave.controllers.FileController;
 import org.pentaho.di.plugins.fileopensave.providers.ProviderService;
 import org.pentaho.di.plugins.fileopensave.providers.local.LocalFileProvider;
+import org.pentaho.di.plugins.fileopensave.providers.local.model.LocalFile;
+import org.pentaho.di.plugins.fileopensave.providers.recents.RecentFileProvider;
+import org.pentaho.di.plugins.fileopensave.providers.recents.model.RecentTree;
+import org.pentaho.di.plugins.fileopensave.providers.vfs.VFSFileProvider;
+import org.pentaho.di.plugins.fileopensave.providers.vfs.model.VFSTree;
+import org.pentaho.di.plugins.fileopensave.service.FileCacheService;
+import org.pentaho.di.plugins.fileopensave.service.ProviderServiceService;
 import org.pentaho.di.ui.core.FileDialogOperation;
 import org.pentaho.di.ui.core.FormDataBuilder;
 import org.pentaho.di.ui.core.PropsUI;
+import org.pentaho.di.ui.core.events.dialog.ProviderFilterType;
 import org.pentaho.di.ui.util.HelpUtils;
 import org.pentaho.di.ui.util.SwtSvgImageUtil;
+
+import net.sf.saxon.om.FastStringBuffer;
 
 public class FileOpenSaveDialog extends Dialog implements FileDetails {
   private static final Class<?> PKG = FileOpenSaveDialog.class;
@@ -114,12 +130,15 @@ public class FileOpenSaveDialog extends Dialog implements FileDetails {
   private int width;
   private int height;
 
+  // The left hand tree viewer
+  protected TreeViewer treeViewer;
+  protected TableViewer fileTableViewer;
+
   private static final FileController FILE_CONTROLLER;
 
   static {
-    LocalFileProvider localProvider = new LocalFileProvider();
-    ProviderService providerService = new ProviderService( Arrays.asList( localProvider, localProvider ) );
-    FILE_CONTROLLER = new FileController( new FileCache(), providerService );
+
+    FILE_CONTROLLER = new FileController( FileCacheService.INSTANCE.get(), ProviderServiceService.INSTANCE.get() );
   }
 
   public FileOpenSaveDialog( Shell parentShell, int width, int height, LogChannelInterface logger ) {
@@ -309,13 +328,16 @@ public class FileOpenSaveDialog extends Dialog implements FileDetails {
     PropsUI.getInstance().setLook( sashForm );
     sashForm.setLayoutData( new GridData( SWT.FILL, SWT.FILL, true, true ) );
 
-    TreeViewer treeViewer = new TreeViewer( sashForm, SWT.BORDER | SWT.V_SCROLL | SWT.H_SCROLL | SWT.FULL_SELECTION );
+    treeViewer = new TreeViewer( sashForm, SWT.BORDER | SWT.V_SCROLL | SWT.H_SCROLL | SWT.FULL_SELECTION );
     PropsUI.getInstance().setLook( treeViewer.getTree() );
 
-    
+    Image imgTime = rasterImage( "img/Time.S_D.svg", 25, 25 );
+    Image imgVFS = rasterImage( "img/VFS_D.svg", 25, 25 );
     Image imgFolder = rasterImage( "img/file_icons/Archive.S_D.svg", 25, 25 );
     Image imgDisk = rasterImage( "img/Disk.S_D.svg", 25, 25 );
-    
+    Image imgFile = rasterImage( "img/file_icons/Doc.S_D.svg", 25, 25 );
+    Color clrGray = getShell().getDisplay().getSystemColor( SWT.COLOR_GRAY );
+
     treeViewer.setLabelProvider( new LabelProvider() {
       @Override
       public String getText( Object element ) {
@@ -331,9 +353,14 @@ public class FileOpenSaveDialog extends Dialog implements FileDetails {
 
       @Override
       public Image getImage( Object element ) {
-        if( element instanceof Tree ) {
-          return imgDisk; 
-        } else if( element instanceof Directory ) {
+        if ( element instanceof Tree ) {
+          if( element instanceof RecentTree ) {
+            return imgTime;
+          } else if ( element instanceof VFSTree ) {
+            return imgVFS;
+          }
+          return imgDisk;
+        } else if ( element instanceof Directory ) {
           return imgFolder;
         }
         return null;
@@ -341,68 +368,115 @@ public class FileOpenSaveDialog extends Dialog implements FileDetails {
     } );
 
     treeViewer.setContentProvider( new FileTreeContentProvider( FILE_CONTROLLER ) );
-    treeViewer.setInput( "Dummy" );
-    treeViewer.refresh();
 
-    treeViewer.addDoubleClickListener( e -> {
+    // Load the various file types on the left
+    treeViewer.setInput( FILE_CONTROLLER.load( ProviderFilterType.ALL_PROVIDERS.toString() ).toArray() );
+
+    treeViewer.addPostSelectionChangedListener( e -> {
       IStructuredSelection selection = (IStructuredSelection) e.getSelection();
       Object selectedNode = selection.getFirstElement();
-      treeViewer.setExpandedState( selectedNode, !treeViewer.getExpandedState( selectedNode ) );
-    });
-    
-    
-    TableViewer tableViewer = new TableViewer( sashForm, SWT.BORDER | SWT.V_SCROLL | SWT.FULL_SELECTION );
-    PropsUI.getInstance().setLook( tableViewer.getTable() );
-    tableViewer.getTable().setHeaderVisible( true );;
+      // Expand the selection in the treeviewer
+      if( !treeViewer.getExpandedState( selectedNode ) ) {
+        treeViewer.setExpandedState( selectedNode, true );
+      }
+      // Update the path that is selected
+      selectPath( selectedNode );
+    } );
 
-    TableViewerColumn tvcName = new TableViewerColumn( tableViewer, SWT.NONE );
+    fileTableViewer = new TableViewer( sashForm, SWT.BORDER | SWT.V_SCROLL | SWT.FULL_SELECTION );
+    PropsUI.getInstance().setLook( fileTableViewer.getTable() );
+    fileTableViewer.getTable().setHeaderVisible( true );
+
+    TableViewerColumn tvcName = new TableViewerColumn( fileTableViewer, SWT.NONE );
     tvcName.getColumn().setText( BaseMessages.getString( PKG, "file-open-save-plugin.files.name.header" ) );
     tvcName.getColumn().setWidth( 250 );
 
-   
-
-    ColumnLabelProvider clp = new ColumnLabelProvider() {
+    ColumnLabelProvider clpName = new ColumnLabelProvider() {
 
       @Override
       public String getText( Object element ) {
-
-        return element.toString();
+        File f = (File) element;
+        return f.getName();
       }
 
       @Override
       public Image getImage( Object element ) {
-        return imgFolder;
+        if ( element instanceof Directory ) {
+          return imgFolder;
+        } else if ( element instanceof File ) {
+          return imgFile;
+        }
+        return null;
       }
 
     };
 
-    tvcName.setLabelProvider( clp );
+    tvcName.setLabelProvider( clpName );
 
-    TableViewerColumn tvcType = new TableViewerColumn( tableViewer, SWT.NONE );
+    TableViewerColumn tvcType = new TableViewerColumn( fileTableViewer, SWT.NONE );
     tvcType.getColumn().setText( BaseMessages.getString( PKG, "file-open-save-plugin.files.type.header" ) );
-    tvcType.getColumn().setWidth( 80 );
+    tvcType.getColumn().setWidth( 100 );
     tvcType.getColumn().setResizable( false );
-    tvcType.setLabelProvider( clp );
+    tvcType.setLabelProvider( new ColumnLabelProvider() {
+      @Override
+      public Color getForeground( Object element ) {
+        return clrGray;
+      }
 
-    TableViewerColumn tvcModified = new TableViewerColumn( tableViewer, SWT.NONE );
+      @Override
+      public String getText( Object element ) {
+        return super.getText( StringUtils.capitalize( ( (File) element ).getType() ) );
+      }
+    } );
+
+    TableViewerColumn tvcModified = new TableViewerColumn( fileTableViewer, SWT.NONE );
     tvcModified.getColumn().setText( BaseMessages.getString( PKG, "file-open-save-plugin.files.modified.header" ) );
-    tvcModified.getColumn().setWidth( 110 );
+    tvcModified.getColumn().setWidth( 140 );
     tvcModified.getColumn().setResizable( false );
 
-    tvcModified.setLabelProvider( clp );
+    tvcModified.setLabelProvider( new ColumnLabelProvider() {
+      SimpleDateFormat sdf = new SimpleDateFormat( "MM/dd/yy hh:mm aa" );
 
-    tableViewer.getTable().addListener( SWT.Resize, ( e ) -> {
-      Rectangle r = tableViewer.getTable().getClientArea();
+      @Override
+      public Color getForeground( Object element ) {
+        return clrGray;
+      }
+
+      @Override
+      public String getText( Object element ) {
+        try {
+          return super.getText( sdf.format( ( (File) element ).getDate() ) );
+        } catch ( Exception e ) {
+          return "";
+        }
+      }
+    } );
+
+    fileTableViewer.getTable().addListener( SWT.Resize, ( e ) -> {
+      Rectangle r = fileTableViewer.getTable().getClientArea();
       tvcName.getColumn()
           .setWidth( Math.max( 150, r.width - tvcType.getColumn().getWidth() - tvcModified.getColumn().getWidth() ) );
 
     } );
 
-    tableViewer.setContentProvider( ArrayContentProvider.getInstance() );
-
-    Object[] entries = IntStream.range( 0, 100 ).mapToObj( i -> new Integer( i ) ).toArray();
-    tableViewer.setInput( entries );
-
+    fileTableViewer.setContentProvider( ArrayContentProvider.getInstance() );
+    fileTableViewer.addDoubleClickListener( ( e ) -> {
+      Object selection = ( (IStructuredSelection ) e.getSelection() ).getFirstElement();
+      
+      if( selection != null && selection instanceof Directory  ) {
+        treeViewer.setExpandedState( selection, true );
+        treeViewer.setSelection( new StructuredSelection( selection ), true );
+      }
+    });
+    
+    
+    fileTableViewer.addDoubleClickListener( ( e ) -> {
+      LocalFile jjarvis = new LocalFile();
+      jjarvis.setPath( "/C:\\/Users/jjarvis" );
+      
+      treeViewer.expandToLevel( jjarvis, TreeViewer.ALL_LEVELS );
+    });
+    
     sashForm.setWeights( new int[] {
       1, 2 } );
 
@@ -478,6 +552,32 @@ public class FileOpenSaveDialog extends Dialog implements FileDetails {
 
   public void setParentPath( String parentPath ) {
     this.parentPath = parentPath;
+  }
+
+  protected void selectPath( Object selectedElement ) {
+    selectPath( selectedElement, true );
+  }
+
+  protected void selectPath( Object selectedElement, boolean useCache ) {
+
+    if ( selectedElement instanceof Tree ) {
+
+      List<Object> children = ( (Tree) selectedElement ).getChildren();
+      if ( children != null ) {
+        fileTableViewer.setInput( children.toArray() );
+      }
+    } else if ( selectedElement instanceof Directory ) {
+      try {
+        fileTableViewer.setInput( FILE_CONTROLLER.getFiles( (File) selectedElement, null, useCache ).stream()
+            .sorted( Comparator.comparing( f -> f instanceof Directory, Boolean::compare ).reversed()
+                .thenComparing( Comparator.comparing( f -> ( (File) f ).getName(), String.CASE_INSENSITIVE_ORDER ) ) )
+            .toArray() );
+      } catch ( FileException e ) {
+        // TODO Auto-generated catch block
+        e.printStackTrace();
+      }
+    }
+
   }
 
   protected static class FlatButton {
@@ -591,33 +691,34 @@ public class FileOpenSaveDialog extends Dialog implements FileDetails {
 
     @Override
     public Object[] getElements( Object inputElement ) {
-      System.out.println( "here " + inputElement );
-      if ( inputElement.equals( "Dummy" ) ) {
-        Object[] results = fileController.load( "" ).toArray();
-        for ( Object o : results ) {
-          System.out.println( o );
-        }
-        return results;
+      /*
+       * System.out.println( "here " + inputElement ); if ( "Root".equals( inputElement ) ) { Object[] results =
+       * fileController.load( ProviderFilterType.ALL_PROVIDERS.toString() ).toArray(); for ( Object o : results ) {
+       * System.out.println( ( (Tree) o ).getName() ); } return results;
+       * 
+       * } return null;
+       */
 
-      } else if ( inputElement instanceof Tree ) {
-
-        Tree tree = (Tree) inputElement;
-
-      }
-      return null;
+      return (Object[]) inputElement;
     }
 
     @Override
     public Object[] getChildren( Object parentElement ) {
-      System.out.println( "Get Children "  + parentElement ); 
+      
       if ( parentElement instanceof Tree ) {
-        return ( (Tree) parentElement ).getChildren().toArray();
+        System.out.println( "Get Children " + ((Tree) parentElement ).getName() );
+        Tree parentTree = (Tree) parentElement;
+        if( parentTree.isHasChildren() ) {
+          return ( parentTree ).getChildren().toArray();
+        }
       } else if ( parentElement instanceof Directory ) {
         try {
-          return fileController.getFiles( (Directory) parentElement, "", true ).toArray();
+          System.out.println( "Get Children " + ((File) parentElement).getPath() );
+          return fileController.getFiles( (Directory) parentElement, null, true ).stream()
+              .filter( f -> f instanceof Directory )
+              .sorted( Comparator.comparing( f -> f.getName(), String.CASE_INSENSITIVE_ORDER ) ).toArray();
         } catch ( FileException e ) {
-          // TODO Auto-generated catch block
-          e.printStackTrace();
+          // TODO: Error message that something went wrong
         }
       }
 
@@ -627,7 +728,6 @@ public class FileOpenSaveDialog extends Dialog implements FileDetails {
     @Override
     public Object getParent( Object element ) {
 
-      // TODO Auto-generated method stub
       return null;
     }
 
