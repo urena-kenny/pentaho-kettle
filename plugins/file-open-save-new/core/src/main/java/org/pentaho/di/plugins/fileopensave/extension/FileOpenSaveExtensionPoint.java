@@ -46,9 +46,9 @@ import java.util.function.Supplier;
  */
 
 @ExtensionPoint(
-  id = "FileOpenSaveNewExtensionPoint",
-  extensionPointId = "SpoonOpenSaveNew",
-  description = "Open the new file browser"
+        id = "FileOpenSaveNewExtensionPoint",
+        extensionPointId = "SpoonOpenSaveNew",
+        description = "Open the new file browser"
 )
 public class FileOpenSaveExtensionPoint implements ExtensionPointInterface {
 
@@ -61,7 +61,7 @@ public class FileOpenSaveExtensionPoint implements ExtensionPointInterface {
   public FileOpenSaveExtensionPoint() {
     this( ProviderServiceService.INSTANCE.get() );
   }
-  
+
   public FileOpenSaveExtensionPoint( ProviderService providerService ) {
     this.providerService = providerService;
   }
@@ -70,12 +70,11 @@ public class FileOpenSaveExtensionPoint implements ExtensionPointInterface {
     FileDialogOperation fileDialogOperation = (FileDialogOperation) o;
 
     resolveProvider( fileDialogOperation );
-    
-    final FileOpenSaveDialog fileOpenSaveDialog =
-      new FileOpenSaveDialog( spoonSupplier.get().getShell(), WIDTH, HEIGHT, logChannelInterface );
 
-    
-    fileOpenSaveDialog.open();
+    final FileOpenSaveDialog fileOpenSaveDialog =
+            new FileOpenSaveDialog( spoonSupplier.get().getShell(), WIDTH, HEIGHT, logChannelInterface );
+
+    fileOpenSaveDialog.open(fileDialogOperation);
 
     fileDialogOperation.setPath( null );
     fileDialogOperation.setFilename( null );

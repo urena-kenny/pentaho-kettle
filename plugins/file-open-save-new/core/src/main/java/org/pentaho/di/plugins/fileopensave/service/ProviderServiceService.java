@@ -12,33 +12,33 @@ import org.pentaho.di.plugins.fileopensave.providers.vfs.VFSFileProvider;
 
 public enum ProviderServiceService {
 
-  INSTANCE;
+    INSTANCE;
 
-  private ProviderService providerService;
+    private ProviderService providerService;
 
-  private ProviderServiceService() {
+    private ProviderServiceService() {
 
-    LocalFileProvider localProvider = new LocalFileProvider();
-    RepositoryFileProvider repoProvider = new RepositoryFileProvider();
-    RecentFileProvider recentProvider = new RecentFileProvider();
-    VFSFileProvider vfsProvider = new VFSFileProvider();
+        LocalFileProvider localProvider = new LocalFileProvider();
+        RepositoryFileProvider repoProvider = new RepositoryFileProvider();
+        RecentFileProvider recentProvider = new RecentFileProvider();
+        VFSFileProvider vfsProvider = new VFSFileProvider();
 
-    ConnectionManager.getInstance().setMetastoreSupplier( () -> {
+        ConnectionManager.getInstance().setMetastoreSupplier( () -> {
 
-      try {
-        return MetaStoreConst.openLocalPentahoMetaStore();
-      } catch ( Exception e ) {
-        // ERror getting metastore
-        throw new RuntimeException( e );
-      }
-    } );
+            try {
+                return MetaStoreConst.openLocalPentahoMetaStore();
+            } catch ( Exception e ) {
+                // Error getting metastore
+                throw new RuntimeException( e );
+            }
+        } );
 
-    providerService = new ProviderService( Arrays.asList( recentProvider, localProvider, repoProvider, vfsProvider ) );
+        this.providerService = new ProviderService( Arrays.asList( recentProvider, localProvider, repoProvider, vfsProvider ) );
 
-  }
+    }
 
-  public ProviderService get() {
-    return providerService;
-  }
+    public ProviderService get() {
+        return providerService;
+    }
 
 }
