@@ -161,6 +161,8 @@ public class FileOpenSaveDialog extends Dialog implements FileDetails {
 
   private TypedComboBox<FilterFileType> typedComboBox;
 
+  private Text txtNav;
+
   // Buttons
   private Button btnSave;
 
@@ -560,10 +562,12 @@ public class FileOpenSaveDialog extends Dialog implements FileDetails {
         .setToolTipText( BaseMessages.getString( PKG, "file-open-save-plugin.app.refresh.button" ) )
         .setLayoutData( new RowData() ).setEnabled( true );
 
-    Composite navComposite = new Composite( buttons, SWT.BORDER );
-    PropsUI.getInstance().setLook( navComposite );
-    navComposite.setBackground( getShell().getDisplay().getSystemColor( SWT.COLOR_WHITE ) );
-    navComposite.setLayoutData(
+    txtNav = new Text( buttons, SWT.BORDER );
+
+    this.txtNav.setEditable( true );
+    PropsUI.getInstance().setLook( txtNav );
+    txtNav.setBackground( getShell().getDisplay().getSystemColor( SWT.COLOR_WHITE ) );
+    txtNav.setLayoutData(
       new FormDataBuilder().left( forwardButton.getLabel(), 10 ).right( fileButtons, -10 ).height( 32 ).result() );
 
     return buttons;
@@ -705,15 +709,16 @@ public class FileOpenSaveDialog extends Dialog implements FileDetails {
 
       } else if ( selection instanceof File ) {
         File localFile = (File) selection;
-        if ( command.equalsIgnoreCase( FileDialogOperation.SELECT_FILE ) ) {
+        if ( command.equalsIgnoreCase( FileDialogOperation.SELECT_FILE )
+          || command.equalsIgnoreCase( FileDialogOperation.OPEN )
+          || command.equalsIgnoreCase( FileDialogOperation.SELECT_FILE_FOLDER ) ) {
           String fileExtension = localFile.getPath().substring( localFile.getPath().lastIndexOf( FILE_PERIOD ) );
           if ( Utils.matches( fileExtension, typedComboBox.getSelection().getValue() ) ) {
+
+            txtNav.setText( localFile.getRoot() + localFile.getPath() );
             openFileSelector( localFile );
             getShell().dispose();
           }
-        } else if ( command.equalsIgnoreCase( FileDialogOperation.OPEN ) || command.equalsIgnoreCase( FileDialogOperation.SELECT_FILE_FOLDER ) ) {
-          openFileSelector( localFile );
-          getShell().dispose();
         }
       }
       processState();
@@ -964,6 +969,7 @@ public class FileOpenSaveDialog extends Dialog implements FileDetails {
         parentPath = null;
         path = null;
         name = null;
+        txtNav.setText( ( (Tree) selectedElement ).getName() );
       }
       flatBtnAdd.setEnabled( false );
       processState();
@@ -974,6 +980,7 @@ public class FileOpenSaveDialog extends Dialog implements FileDetails {
               .thenComparing( Comparator.comparing( f -> ( (File) f ).getName(),
                 String.CASE_INSENSITIVE_ORDER ) ) )
           .toArray() );
+
         for ( TableItem fileTableItem : fileTableViewer.getTable().getItems() ) {
           Object tableItemObject = fileTableItem.getData();
           if ( !( tableItemObject instanceof Directory ) ) {
@@ -988,8 +995,7 @@ public class FileOpenSaveDialog extends Dialog implements FileDetails {
           }
         }
 
-
-
+        txtNav.setText( ( (Directory) selectedElement ).getPath() );
         flatBtnAdd.setEnabled( ( (Directory) selectedElement ).isCanAddChildren() );
 
         processState();
