@@ -743,6 +743,7 @@ public class FileOpenSaveDialog extends Dialog implements FileDetails {
           name = ( (File) selectedNode ).getName();
         }
         processState();
+        txtNav.setText( getNavigationPath( (File) selectedNode ) );
       }
     } );
 
@@ -758,20 +759,17 @@ public class FileOpenSaveDialog extends Dialog implements FileDetails {
           path = ( (Directory) selection ).getPath();
           provider = ( (Directory) selection).getProvider();
         }
-
+        txtNav.setText( getNavigationPath( (File) selection ) );
       } else if ( selection instanceof File ) {
         File localFile = (File) selection;
         if ( command.equalsIgnoreCase( FileDialogOperation.SELECT_FILE )
           || command.equalsIgnoreCase( FileDialogOperation.OPEN )
           || command.equalsIgnoreCase( FileDialogOperation.SELECT_FILE_FOLDER ) ) {
+          txtNav.setText( getNavigationPath( localFile ) );
           String fileExtension = localFile.getPath().substring( localFile.getPath().lastIndexOf( FILE_PERIOD ) );
           if ( Utils.matches( fileExtension, typedComboBox.getSelection().getValue() ) ) {
-
             openFileSelector( localFile );
             getShell().dispose();
-          } else {
-
-            txtNav.setText( getNavigationPath( localFile ) );
           }
         }
       }
