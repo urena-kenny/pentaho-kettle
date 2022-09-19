@@ -79,6 +79,7 @@ import org.eclipse.swt.widgets.MenuItem;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.TableItem;
 import org.eclipse.swt.widgets.Text;
+import org.eclipse.swt.widgets.TreeItem;
 import org.eclipse.swt.widgets.TypedListener;
 import org.pentaho.di.core.Const;
 import org.pentaho.di.core.SwtUniversalImage;
@@ -439,6 +440,9 @@ public class FileOpenSaveDialog extends Dialog implements FileDetails {
     } else {
       createOpenLayout( parent, select );
     }
+    select.setFocus();
+    setPreviousSelection();
+
     return parent;
   }
 
@@ -447,6 +451,120 @@ public class FileOpenSaveDialog extends Dialog implements FileDetails {
     type = null;
     provider = null;
     path = null;
+  }
+
+  private void setPreviousSelection() {
+    String targetPath = this.fileDialogOperation.getPath();
+    String[] targetPathArray; // C:\Programs\
+    // Sets navigation to previous selection
+    if ( StringUtils.isNotEmpty( targetPath ) ) {
+      FileProvider fileProvider = null;
+      if ( StringUtils.isNotEmpty( this.fileDialogOperation.getProvider() ) ) {
+        try {
+          ProviderFilterType providerFilterType =
+                  ProviderFilterType.valueOf( this.fileDialogOperation.getProvider().toUpperCase() );
+          fileProvider = ProviderServiceService.get().get( providerFilterType.toString() );
+        } catch ( InvalidFileProviderException e ) {
+          // Ignore
+        }
+      }
+      if ( fileProvider != null ) {
+        char pathSplitter = targetPath.contains( "/" ) ? '/' : '\\';
+        // URL's, Linux File Paths
+        targetPathArray = getStringsAtEachDirectory( targetPath, pathSplitter );
+
+        Tree tree = fileProvider.getTree();
+        TreeItem[] treeItems = treeViewer.getTree().getItems();
+        Tree selectedTree = null;
+        for ( TreeItem currentTreeItem : treeItems ) {
+          Object currentObject = currentTreeItem.getData();
+          if( currentObject instanceof Tree && ((Tree) currentObject).getName().equals( fileProvider.getName() )) {
+            selectedTree = (Tree) currentObject;
+            break;
+          }
+        }
+        if ( selectedTree != null) {
+          ISelection structuredSelection = new StructuredSelection( selectedTree );
+          treeViewer.setSelection( structuredSelection, true );
+          List<File> children = tree.getChildren();
+          // Sort by increasing length
+          children.sort( ( f1, f2 ) -> ( f2 ).getPath().length() - ( ( f1 ).getPath().length() ) );
+          File currentFile;
+          int targetPathArrayIndex;
+          if( !children.isEmpty() && children.get( 0 ) instanceof RepositoryFile ) {
+            targetPathArrayIndex = 1; // Skips the "/" by itself
+          } else {
+            targetPathArrayIndex = 0;
+          }
+
+
+          do {
+            currentFile = null;
+
+            if ( targetPathArrayIndex == targetPathArray.length ) {
+              break;
+            }
+            for ( File file : children ) {
+              if ( file.getPath().equals( targetPathArray[ targetPathArrayIndex ] ) ) {
+                currentFile = file;
+                break;
+              }
+            }
+            if ( currentFile instanceof Directory ) {
+              treeViewer.setSelection( new StructuredSelection( currentFile ), true );
+              treeViewer.setExpandedState( currentFile, true );
+              try {
+                children = FILE_CONTROLLER.getFiles( currentFile, null, false );
+                // Sort in increasing order
+                children.sort( ( f1, f2 ) -> ( f2 ).getPath().length() - ( ( f1 ).getPath().length() ) );
+                targetPathArrayIndex++;
+              } catch ( FileException e ) {
+                // Ignore
+              }
+            } else if (currentFile != null) {
+              fileTableViewer.setSelection( new StructuredSelection( currentFile ), true );
+            }
+          } while ( currentFile != null );
+        }
+      }
+    }
+  }
+
+  private String[] getStringsAtEachDirectory( String targetPath, char pathSplitter ) {
+    String[] targetPathArray;
+    int arraySize = (int) Arrays.stream( targetPath.split( "" ) ).filter( s -> s.equals( String.valueOf( pathSplitter ) ) ).count() + 1;
+    targetPathArray = new String[arraySize];
+    int currentTargetPathArrayIndex = 0;
+    if ( pathSplitter == '\\'){
+    for ( int i = 0; i < targetPath.length(); i++ ) {
+      if ( targetPath.charAt( i ) == pathSplitter || i == targetPath.length() - 1 ) {
+
+        targetPathArray[currentTargetPathArrayIndex] = targetPath.substring( 0, i );
+        currentTargetPathArrayIndex++;
+        }
+     }
+    } else {
+      targetPathArray[0] = "/";
+      currentTargetPathArrayIndex = 1;
+      for ( int i = currentTargetPathArrayIndex; i < targetPath.length(); i++ ) {
+        if ( targetPath.charAt( i ) == pathSplitter ) {
+          targetPathArray[currentTargetPathArrayIndex] = targetPath.substring( 0, i );
+          currentTargetPathArrayIndex++;
+        }
+      }
+      targetPathArray[currentTargetPathArrayIndex] = targetPath;
+    }
+    return targetPathArray;
+  }
+
+  private String createFileNameFromPath(String filePath) {
+    String tempName = null;
+    if ( filePath != null && filePath.contains( "/" ) ) {
+      tempName = filePath.substring( filePath.lastIndexOf( '/' ) + 1);
+    } else if ( filePath != null && filePath.contains( "\\" ) ) {
+      tempName = filePath.substring( filePath.lastIndexOf( '\\' ) + 1);
+    }
+    return tempName;
   }
 
   private void createSaveLayout( Composite parent, Composite select ) {
@@ -1313,7 +1431,7 @@ public class FileOpenSaveDialog extends Dialog implements FileDetails {
       setStateVariablesFromSelection( selectedFileTreeViewer );
       name = null;
     } else if ( selectedFileTreeViewer != null && selectedFileTreeViewer.getFirstElement() instanceof File ) {
-      String tempName = ( (File) selectedFileTreeViewer.getFirstElement() ).getPath();
+      String tempName = createFileNameFromPath( ( (File) selectedFileTreeViewer.getFirstElement() ).getPath() );
 
       if ( command.equals( FileDialogOperation.SELECT_FILE )
         || command.equalsIgnoreCase( FileDialogOperation.SELECT_FILE_FOLDER )
