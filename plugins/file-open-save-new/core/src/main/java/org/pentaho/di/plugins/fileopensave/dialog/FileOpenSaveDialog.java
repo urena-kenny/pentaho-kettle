@@ -101,6 +101,7 @@ import org.pentaho.di.plugins.fileopensave.providers.local.model.LocalFile;
 import org.pentaho.di.plugins.fileopensave.providers.recents.model.RecentTree;
 import org.pentaho.di.plugins.fileopensave.providers.repository.model.RepositoryFile;
 import org.pentaho.di.plugins.fileopensave.providers.vfs.model.VFSFile;
+import org.pentaho.di.plugins.fileopensave.providers.vfs.model.VFSLocation;
 import org.pentaho.di.plugins.fileopensave.providers.vfs.model.VFSTree;
 import org.pentaho.di.plugins.fileopensave.service.FileCacheService;
 import org.pentaho.di.plugins.fileopensave.service.ProviderServiceService;
@@ -488,14 +489,18 @@ public class FileOpenSaveDialog extends Dialog implements FileDetails {
           treeViewer.setSelection( structuredSelection, true );
           List<File> children = tree.getChildren();
           // Sort by increasing length
-          children.sort( ( f1, f2 ) -> ( f2 ).getPath().length() - ( ( f1 ).getPath().length() ) );
+          sortFileList( children );
           File currentFile;
+
           int targetPathArrayIndex;
+
+          // Skip the single "/" when accessing repository
           if( !children.isEmpty() && children.get( 0 ) instanceof RepositoryFile ) {
-            targetPathArrayIndex = 1; // Skips the "/" by itself
+            targetPathArrayIndex = 1;
           } else {
             targetPathArrayIndex = 0;
           }
+
 
 
           do {
@@ -505,7 +510,7 @@ public class FileOpenSaveDialog extends Dialog implements FileDetails {
               break;
             }
             for ( File file : children ) {
-              if ( file.getPath().equals( targetPathArray[ targetPathArrayIndex ] ) ) {
+              if ( isFileEqual( file, targetPathArray[ targetPathArrayIndex] ) ) {
                 currentFile = file;
                 break;
               }
@@ -514,15 +519,13 @@ public class FileOpenSaveDialog extends Dialog implements FileDetails {
               treeViewer.setSelection( new StructuredSelection( currentFile ), true );
               treeViewer.setExpandedState( currentFile, true );
               try {
-                children = FILE_CONTROLLER.getFiles( currentFile, null, false );
+                children = FILE_CONTROLLER.getFiles( currentFile, null,  true );
                 // Sort in increasing order
-                children.sort( ( f1, f2 ) -> ( f2 ).getPath().length() - ( ( f1 ).getPath().length() ) );
+                sortFileList( children );
                 targetPathArrayIndex++;
               } catch ( FileException e ) {
                 // Ignore
               }
-            } else if (currentFile != null) {
-              fileTableViewer.setSelection( new StructuredSelection( currentFile ), true );
             }
           } while ( currentFile != null );
         }
@@ -530,29 +533,68 @@ public class FileOpenSaveDialog extends Dialog implements FileDetails {
     }
   }
 
+  private boolean isFileEqual(File file, String fileName) {
+    boolean isFileEqual = false;
+    if ( file instanceof VFSFile ){
+      if (file instanceof VFSLocation) {
+        String pathName =  ((VFSLocation) file).getConnectionPath();
+        pathName = pathName.substring( 0, pathName.length() - 1 ); // Removes last "/" for comparison
+        isFileEqual =  pathName.equals( fileName);
+      } else if (( (VFSFile) file).getConnectionPath().equals( fileName ))
+      { isFileEqual = true;}
+    } else if (  file.getPath().equals( fileName ) ) {
+      isFileEqual = true;
+    }
+    return isFileEqual;
+  }
+  private void sortFileList(List<File> children) {
+    if ( children.get( 0 ) instanceof VFSFile) {
+      children.sort( ( f1, f2 ) -> ( (VFSFile) f2 ).getConnectionPath().length() - ( ( (VFSFile) f1 ).getConnectionPath().length() ) );
+    } else {
+      children.sort( ( f1, f2 ) -> ( f2 ).getPath().length() - ( ( f1 ).getPath().length() ) );
+    }
+  }
+
   private String[] getStringsAtEachDirectory( String targetPath, char pathSplitter ) {
     String[] targetPathArray;
-    int arraySize = (int) Arrays.stream( targetPath.split( "" ) ).filter( s -> s.equals( String.valueOf( pathSplitter ) ) ).count() + 1;
-    targetPathArray = new String[arraySize];
+
     int currentTargetPathArrayIndex = 0;
     if ( pathSplitter == '\\'){
-    for ( int i = 0; i < targetPath.length(); i++ ) {
-      if ( targetPath.charAt( i ) == pathSplitter || i == targetPath.length() - 1 ) {
-
-        targetPathArray[currentTargetPathArrayIndex] = targetPath.substring( 0, i );
-        currentTargetPathArrayIndex++;
+      int arraySize = targetPath.split( "\\\\" ).length + 1;
+      targetPathArray = new String[arraySize];
+      for ( int i = 0; i < targetPath.length(); i++ ) {
+        if ( targetPath.charAt( i ) == pathSplitter || i == targetPath.length() - 1 ) {
+          targetPathArray[currentTargetPathArrayIndex] = targetPath.substring( 0, i + 1);
+          currentTargetPathArrayIndex++;
         }
      }
     } else {
-      targetPathArray[0] = "/";
-      currentTargetPathArrayIndex = 1;
-      for ( int i = currentTargetPathArrayIndex; i < targetPath.length(); i++ ) {
-        if ( targetPath.charAt( i ) == pathSplitter ) {
-          targetPathArray[currentTargetPathArrayIndex] = targetPath.substring( 0, i );
-          currentTargetPathArrayIndex++;
+      // VFS File Path
+      if ( targetPath.contains( "//" ) ) {
+        int indexOfDoubleSlash = targetPath.indexOf( "//" ) + 2;
+        int arraySize =  targetPath.substring( indexOfDoubleSlash ).split( String.valueOf( pathSplitter ) ).length;
+        targetPathArray = new String[arraySize];
+
+        for ( int i = indexOfDoubleSlash; i < targetPath.length(); i++ ) {
+          if ( targetPath.charAt( i ) == pathSplitter ) {
+            targetPathArray[ currentTargetPathArrayIndex ] = targetPath.substring( 0, i );
+            currentTargetPathArrayIndex++;
+          }
+        }
+      } else {
+        // Repository or Linux File Path
+        int arraySize = targetPath.split( String.valueOf( pathSplitter ) ).length;
+        targetPathArray = new String[ arraySize ];
+        targetPathArray[ currentTargetPathArrayIndex ] = String.valueOf( pathSplitter );
+        currentTargetPathArrayIndex++;
+        for ( int i = currentTargetPathArrayIndex; i < targetPath.length(); i++ ) {
+          if ( targetPath.charAt( i ) == pathSplitter ) {
+            targetPathArray[ currentTargetPathArrayIndex ] = targetPath.substring( 0, i );
+            currentTargetPathArrayIndex++;
+          }
         }
       }
-      targetPathArray[currentTargetPathArrayIndex] = targetPath;
+      targetPathArray[ currentTargetPathArrayIndex ] = targetPath;
     }
     return targetPathArray;
   }
