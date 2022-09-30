@@ -890,20 +890,16 @@ public class FileOpenSaveDialog extends Dialog implements FileDetails {
               File fileOrFolderToDelete = (File) fileTableViewerSelection.getFirstElement();
               if ( fileTableViewerSelection.size() == 1 ) {
                 String selectionType = fileOrFolderToDelete.getType();
-                if ( selectionType.equalsIgnoreCase( "file" ) ) {
-                  messageList = ( deleteBtnMessages( "file", fileOrFolderToDelete.getName(), 1 ) );
-                  title = messageList.get( 0 );
-                  message = messageList.get( 1 );
-                } else if ( selectionType.equalsIgnoreCase( "folder" ) ) {
+                if ( fileOrFolderToDelete instanceof Directory) {
                   messageList = ( deleteBtnMessages( "folder", fileOrFolderToDelete.getName(), 1 ) );
-                  title = messageList.get( 0 );
-                  message = messageList.get( 1 );
+                } else {
+                  messageList = ( deleteBtnMessages( "file", fileOrFolderToDelete.getName(), 1 ) );
                 }
               } else {
                 messageList = ( deleteBtnMessages( "many", StringUtils.EMPTY, fileTableViewerSelection.size() ) );
-                title = messageList.get( 0 );
-                message = messageList.get( 1 );
               }
+              title = messageList.get( 0 );
+              message = messageList.get( 1 );
               warningDialog = new WarningDialog( getShell(), title, message, listenerMap );
               warningDialog.open();
             }
