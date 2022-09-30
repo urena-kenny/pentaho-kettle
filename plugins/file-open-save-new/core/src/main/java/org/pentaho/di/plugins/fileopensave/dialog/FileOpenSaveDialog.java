@@ -889,7 +889,6 @@ public class FileOpenSaveDialog extends Dialog implements FileDetails {
             if ( !fileTableViewerSelection.isEmpty() ) {
               File fileOrFolderToDelete = (File) fileTableViewerSelection.getFirstElement();
               if ( fileTableViewerSelection.size() == 1 ) {
-                String selectionType = fileOrFolderToDelete.getType();
                 if ( fileOrFolderToDelete instanceof Directory) {
                   messageList = ( deleteBtnMessages( "folder", fileOrFolderToDelete.getName(), 1 ) );
                 } else {
