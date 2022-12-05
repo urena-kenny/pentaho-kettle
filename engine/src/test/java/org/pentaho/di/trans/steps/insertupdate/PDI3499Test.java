@@ -86,7 +86,7 @@ public class PDI3499Test {
     inputRowMeta.addValueMeta( valueMeta );
 
     InsertUpdateMeta stepMeta = smh.processRowsStepMetaInterface;
-    doReturn( new Boolean[] { true } ).when( stepMeta ).getUpdate();
+    doReturn( new Boolean[] { true } ).when( stepMeta ).getUpdateFields();
 
     InsertUpdateData stepData = smh.processRowsStepDataInterface;
     stepData.lookupParameterRowMeta = inputRowMeta;

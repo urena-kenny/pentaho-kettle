@@ -24,11 +24,13 @@ package org.pentaho.di.trans.steps.insertupdate;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import org.pentaho.di.core.CheckResult;
 import org.pentaho.di.core.CheckResultInterface;
 import org.pentaho.di.core.Const;
 import org.pentaho.di.core.injection.AfterInjection;
+import org.pentaho.di.core.injection.InjectionDeep;
 import org.pentaho.di.core.util.Utils;
 import org.pentaho.di.core.ProvidesModelerMeta;
 import org.pentaho.di.core.SQLStatement;
@@ -57,6 +59,7 @@ import org.pentaho.di.trans.step.StepInterface;
 import org.pentaho.di.trans.step.StepMeta;
 import org.pentaho.di.trans.step.StepMetaInterface;
 import org.pentaho.di.trans.step.utils.RowMetaUtils;
+import org.pentaho.di.trans.steps.normaliser.NormaliserMeta;
 import org.pentaho.metastore.api.IMetaStore;
 import org.w3c.dom.Node;
 
@@ -81,33 +84,11 @@ public class InsertUpdateMeta extends BaseStepMeta implements StepMetaInterface,
   /** database connection */
   private DatabaseMeta databaseMeta;
 
-  /** which field in input stream to compare with? */
-  @Injection( name = "KEY_STREAM", group = "KEYS" )
-  private String[] keyStream;
+  @InjectionDeep
+  private KeyField[] keyFields = {};
 
-  /** field in table */
-  @Injection( name = "KEY_LOOKUP", group = "KEYS" )
-  private String[] keyLookup;
-
-  /** Comparator: =, <>, BETWEEN, ... */
-  @Injection( name = "KEY_CONDITION", group = "KEYS" )
-  private String[] keyCondition;
-
-  /** Extra field for between... */
-  @Injection( name = "KEY_STREAM2", group = "KEYS" )
-  private String[] keyStream2;
-
-  /** Field value to update after lookup */
-  @Injection( name = "UPDATE_LOOKUP", group = "UPDATES" )
-  private String[] updateLookup;
-
-  /** Stream name to update value with */
-  @Injection( name = "UPDATE_STREAM", group = "UPDATES" )
-  private String[] updateStream;
-
-  /** boolean indicating if field needs to be updated */
-  @Injection( name = "UPDATE_FLAG", group = "UPDATES" )
-  private Boolean[] update;
+  @InjectionDeep
+  private UpdateField[] updateFields = {};
 
   /** Commit size for inserts/updates */
   @Injection( name = "COMMIT_SIZE" )
@@ -183,64 +164,20 @@ public class InsertUpdateMeta extends BaseStepMeta implements StepMetaInterface,
     this.databaseMeta = database;
   }
 
-  /**
-   * @return Returns the keyCondition.
-   */
-  public String[] getKeyCondition() {
-    return keyCondition;
+  public KeyField[] getKeyFields() {
+    return keyFields;
   }
 
-  /**
-   * @param keyCondition
-   *          The keyCondition to set.
-   */
-  public void setKeyCondition( String[] keyCondition ) {
-    this.keyCondition = keyCondition;
+  public void setKeyFields( KeyField[] keyFields ) {
+    this.keyFields = keyFields;
   }
 
-  /**
-   * @return Returns the keyLookup.
-   */
-  public String[] getKeyLookup() {
-    return keyLookup;
+  public UpdateField[] getUpdateFields() {
+    return updateFields;
   }
 
-  /**
-   * @param keyLookup
-   *          The keyLookup to set.
-   */
-  public void setKeyLookup( String[] keyLookup ) {
-    this.keyLookup = keyLookup;
-  }
-
-  /**
-   * @return Returns the keyStream.
-   */
-  public String[] getKeyStream() {
-    return keyStream;
-  }
-
-  /**
-   * @param keyStream
-   *          The keyStream to set.
-   */
-  public void setKeyStream( String[] keyStream ) {
-    this.keyStream = keyStream;
-  }
-
-  /**
-   * @return Returns the keyStream2.
-   */
-  public String[] getKeyStream2() {
-    return keyStream2;
-  }
-
-  /**
-   * @param keyStream2
-   *          The keyStream2 to set.
-   */
-  public void setKeyStream2( String[] keyStream2 ) {
-    this.keyStream2 = keyStream2;
+  public void setUpdateFields( UpdateField[] updateFields ) {
+    this.updateFields = updateFields;
   }
 
   /**
@@ -258,73 +195,35 @@ public class InsertUpdateMeta extends BaseStepMeta implements StepMetaInterface,
     this.tableName = tableName;
   }
 
-  /**
-   * @return Returns the updateLookup.
-   */
-  public String[] getUpdateLookup() {
-    return updateLookup;
-  }
-
-  /**
-   * @param updateLookup
-   *          The updateLookup to set.
-   */
-  public void setUpdateLookup( String[] updateLookup ) {
-    this.updateLookup = updateLookup;
-  }
-
-  /**
-   * @return Returns the updateStream.
-   */
-  public String[] getUpdateStream() {
-    return updateStream;
-  }
-
-  /**
-   * @param updateStream
-   *          The updateStream to set.
-   */
-  public void setUpdateStream( String[] updateStream ) {
-    this.updateStream = updateStream;
-  }
-
-  public Boolean[] getUpdate() {
-    return update;
-  }
-
-  public void setUpdate( Boolean[] update ) {
-    this.update = update;
-  }
-
   public void loadXML( Node stepnode, List<DatabaseMeta> databases, IMetaStore metaStore ) throws KettleXMLException {
     readData( stepnode, databases );
   }
 
   public void allocate( int nrkeys, int nrvalues ) {
-    keyStream = new String[nrkeys];
-    keyLookup = new String[nrkeys];
-    keyCondition = new String[nrkeys];
-    keyStream2 = new String[nrkeys];
-    updateLookup = new String[nrvalues];
-    updateStream = new String[nrvalues];
-    update = new Boolean[nrvalues];
+    keyFields = new KeyField[nrkeys];
+    for ( int i = 0; i < nrkeys; i++ ) {
+      keyFields[i] = new KeyField();
+    }
+    updateFields = new UpdateField[nrvalues];
+    for ( int i = 0; i < nrvalues; i++ ) {
+      updateFields[i] = new UpdateField();
+    }
   }
 
   public Object clone() {
     InsertUpdateMeta retval = (InsertUpdateMeta) super.clone();
-    int nrkeys = keyStream.length;
-    int nrvalues = updateLookup.length;
+    int nrkeys = keyFields.length;
+    int nrvalues = updateFields.length;
 
     retval.allocate( nrkeys, nrvalues );
 
-    System.arraycopy( keyStream, 0, retval.keyStream, 0, nrkeys );
-    System.arraycopy( keyLookup, 0, retval.keyLookup, 0, nrkeys );
-    System.arraycopy( keyCondition, 0, retval.keyCondition, 0, nrkeys );
-    System.arraycopy( keyStream2, 0, retval.keyStream2, 0, nrkeys );
+    for ( int i = 0; i < nrkeys; i++ ) {
+      retval.keyFields[i] = (KeyField) this.keyFields[i].clone();
+    }
 
-    System.arraycopy( updateLookup, 0, retval.updateLookup, 0, nrvalues );
-    System.arraycopy( updateStream, 0, retval.updateStream, 0, nrvalues );
-    System.arraycopy( update, 0, retval.update, 0, nrvalues );
+    for ( int i = 0; i < nrvalues; i++ ) {
+      retval.updateFields[i] = (UpdateField) this.updateFields[i].clone();
+    }
 
     return retval;
   }
@@ -352,32 +251,32 @@ public class InsertUpdateMeta extends BaseStepMeta implements StepMetaInterface,
       for ( int i = 0; i < nrkeys; i++ ) {
         Node knode = XMLHandler.getSubNodeByNr( lookup, "key", i );
 
-        keyStream[i] = XMLHandler.getTagValue( knode, "name" );
-        keyLookup[i] = XMLHandler.getTagValue( knode, "field" );
-        keyCondition[i] = XMLHandler.getTagValue( knode, "condition" );
-        if ( keyCondition[i] == null ) {
-          keyCondition[i] = "=";
+        keyFields[i].setKeyStream( XMLHandler.getTagValue( knode, "name" ) );
+        keyFields[i].setKeyLookup( XMLHandler.getTagValue( knode, "field" ) );
+        keyFields[i].setKeyCondition( XMLHandler.getTagValue( knode, "condition" ) );
+        if ( keyFields[i].getKeyCondition() == null ) {
+          keyFields[i].setKeyCondition( "=" );
         }
-        keyStream2[i] = XMLHandler.getTagValue( knode, "name2" );
+        keyFields[i].setKeyStream2( XMLHandler.getTagValue( knode, "name2" ) );
       }
 
       for ( int i = 0; i < nrvalues; i++ ) {
         Node vnode = XMLHandler.getSubNodeByNr( lookup, "value", i );
 
-        updateLookup[i] = XMLHandler.getTagValue( vnode, "name" );
-        updateStream[i] = XMLHandler.getTagValue( vnode, "rename" );
-        if ( updateStream[i] == null ) {
-          updateStream[i] = updateLookup[i]; // default: the same name!
+        updateFields[i].setUpdateLookup( XMLHandler.getTagValue( vnode, "name" ) );
+        updateFields[i].setUpdateStream(XMLHandler.getTagValue( vnode, "rename" ));
+        if ( updateFields[i].getUpdateStream() == null ) {
+          updateFields[i].setUpdateStream( updateFields[i].getUpdateLookup() ); // default: the same name!
         }
         String updateValue = XMLHandler.getTagValue( vnode, "update" );
         if ( updateValue == null ) {
           // default TRUE
-          update[i] = Boolean.TRUE;
+          updateFields[i].setUpdate( Boolean.TRUE );
         } else {
           if ( updateValue.equalsIgnoreCase( "Y" ) ) {
-            update[i] = Boolean.TRUE;
+            updateFields[i].setUpdate( Boolean.TRUE );
           } else {
-            update[i] = Boolean.FALSE;
+            updateFields[i].setUpdate( Boolean.FALSE );
           }
         }
       }
@@ -388,8 +287,7 @@ public class InsertUpdateMeta extends BaseStepMeta implements StepMetaInterface,
   }
 
   public void setDefault() {
-    keyStream = null;
-    updateLookup = null;
+
     databaseMeta = null;
     commitSize = "100";
     schemaName = "";
@@ -400,17 +298,10 @@ public class InsertUpdateMeta extends BaseStepMeta implements StepMetaInterface,
 
     allocate( nrkeys, nrvalues );
 
-    for ( int i = 0; i < nrkeys; i++ ) {
-      keyLookup[i] = "age";
-      keyCondition[i] = "BETWEEN";
-      keyStream[i] = "age_from";
-      keyStream2[i] = "age_to";
-    }
-
     for ( int i = 0; i < nrvalues; i++ ) {
-      updateLookup[i] = BaseMessages.getString( PKG, "InsertUpdateMeta.ColumnName.ReturnField" ) + i;
-      updateStream[i] = BaseMessages.getString( PKG, "InsertUpdateMeta.ColumnName.NewName" ) + i;
-      update[i] = Boolean.TRUE;
+      updateFields[i].setUpdateLookup( BaseMessages.getString( PKG, "InsertUpdateMeta.ColumnName.ReturnField" ) + i );
+      updateFields[i].setUpdateStream( BaseMessages.getString( PKG, "InsertUpdateMeta.ColumnName.NewName" ) + i );
+      updateFields[i].setUpdate( Boolean.TRUE );
     }
   }
 
@@ -426,20 +317,20 @@ public class InsertUpdateMeta extends BaseStepMeta implements StepMetaInterface,
     retval.append( "      " ).append( XMLHandler.addTagValue( "schema", schemaName ) );
     retval.append( "      " ).append( XMLHandler.addTagValue( "table", tableName ) );
 
-    for ( int i = 0; i < keyStream.length; i++ ) {
+    for ( int i = 0; i < keyFields.length; i++ ) {
       retval.append( "      <key>" ).append( Const.CR );
-      retval.append( "        " ).append( XMLHandler.addTagValue( "name", keyStream[i] ) );
-      retval.append( "        " ).append( XMLHandler.addTagValue( "field", keyLookup[i] ) );
-      retval.append( "        " ).append( XMLHandler.addTagValue( "condition", keyCondition[i] ) );
-      retval.append( "        " ).append( XMLHandler.addTagValue( "name2", keyStream2[i] ) );
+      retval.append( "        " ).append( XMLHandler.addTagValue( "name", keyFields[i].getKeyStream() ) );
+      retval.append( "        " ).append( XMLHandler.addTagValue( "field", keyFields[i].getKeyLookup() ) );
+      retval.append( "        " ).append( XMLHandler.addTagValue( "condition", keyFields[i].getKeyCondition() ) );
+      retval.append( "        " ).append( XMLHandler.addTagValue( "name2", keyFields[i].getKeyStream2() ) );
       retval.append( "      </key>" ).append( Const.CR );
     }
 
-    for ( int i = 0; i < updateLookup.length; i++ ) {
+    for ( int i = 0; i < updateFields.length; i++ ) {
       retval.append( "      <value>" ).append( Const.CR );
-      retval.append( "        " ).append( XMLHandler.addTagValue( "name", updateLookup[i] ) );
-      retval.append( "        " ).append( XMLHandler.addTagValue( "rename", updateStream[i] ) );
-      retval.append( "        " ).append( XMLHandler.addTagValue( "update", update[i].booleanValue() ) );
+      retval.append( "        " ).append( XMLHandler.addTagValue( "name", updateFields[i].getUpdateLookup()) );
+      retval.append( "        " ).append( XMLHandler.addTagValue( "rename", updateFields[i].getUpdateStream() ) );
+      retval.append( "        " ).append( XMLHandler.addTagValue( "update", updateFields[i].getUpdate().booleanValue() ) );
       retval.append( "      </value>" ).append( Const.CR );
     }
 
@@ -475,16 +366,16 @@ public class InsertUpdateMeta extends BaseStepMeta implements StepMetaInterface,
       allocate( nrkeys, nrvalues );
 
       for ( int i = 0; i < nrkeys; i++ ) {
-        keyStream[i] = rep.getStepAttributeString( id_step, i, "key_name" );
-        keyLookup[i] = rep.getStepAttributeString( id_step, i, "key_field" );
-        keyCondition[i] = rep.getStepAttributeString( id_step, i, "key_condition" );
-        keyStream2[i] = rep.getStepAttributeString( id_step, i, "key_name2" );
+        keyFields[i].setKeyStream( rep.getStepAttributeString( id_step, i, "key_name" ) );
+        keyFields[i].setKeyLookup( rep.getStepAttributeString( id_step, i, "key_field" ) );
+        keyFields[i].setKeyCondition( rep.getStepAttributeString( id_step, i, "key_condition" ) );
+        keyFields[i].setKeyStream2( rep.getStepAttributeString( id_step, i, "key_name2" ) );
       }
 
       for ( int i = 0; i < nrvalues; i++ ) {
-        updateLookup[i] = rep.getStepAttributeString( id_step, i, "value_name" );
-        updateStream[i] = rep.getStepAttributeString( id_step, i, "value_rename" );
-        update[i] = Boolean.valueOf( rep.getStepAttributeBoolean( id_step, i, "value_update", true ) );
+        updateFields[i].setUpdateLookup(  rep.getStepAttributeString( id_step, i, "value_name" ) );
+        updateFields[i].setUpdateStream( rep.getStepAttributeString( id_step, i, "value_rename" ) );
+        updateFields[i].setUpdate( Boolean.valueOf( rep.getStepAttributeBoolean( id_step, i, "value_update", true ) ) );
       }
     } catch ( Exception e ) {
       throw new KettleException( BaseMessages.getString(
@@ -500,17 +391,17 @@ public class InsertUpdateMeta extends BaseStepMeta implements StepMetaInterface,
       rep.saveStepAttribute( id_transformation, id_step, "table", tableName );
       rep.saveStepAttribute( id_transformation, id_step, "update_bypassed", updateBypassed );
 
-      for ( int i = 0; i < keyStream.length; i++ ) {
-        rep.saveStepAttribute( id_transformation, id_step, i, "key_name", keyStream[i] );
-        rep.saveStepAttribute( id_transformation, id_step, i, "key_field", keyLookup[i] );
-        rep.saveStepAttribute( id_transformation, id_step, i, "key_condition", keyCondition[i] );
-        rep.saveStepAttribute( id_transformation, id_step, i, "key_name2", keyStream2[i] );
+      for ( int i = 0; i < keyFields.length; i++ ) {
+        rep.saveStepAttribute( id_transformation, id_step, i, "key_name", keyFields[i].getKeyStream() );
+        rep.saveStepAttribute( id_transformation, id_step, i, "key_field", keyFields[i].keyLookup );
+        rep.saveStepAttribute( id_transformation, id_step, i, "key_condition", keyFields[i].getKeyCondition() );
+        rep.saveStepAttribute( id_transformation, id_step, i, "key_name2", keyFields[i].getKeyStream2() );
       }
 
-      for ( int i = 0; i < updateLookup.length; i++ ) {
-        rep.saveStepAttribute( id_transformation, id_step, i, "value_name", updateLookup[i] );
-        rep.saveStepAttribute( id_transformation, id_step, i, "value_rename", updateStream[i] );
-        rep.saveStepAttribute( id_transformation, id_step, i, "value_update", update[i].booleanValue() );
+      for ( int i = 0; i < updateFields.length; i++ ) {
+        rep.saveStepAttribute( id_transformation, id_step, i, "value_name", updateFields[i].getUpdateLookup() );
+        rep.saveStepAttribute( id_transformation, id_step, i, "value_rename", updateFields[i].getUpdateStream() );
+        rep.saveStepAttribute( id_transformation, id_step, i, "value_update", updateFields[i].getUpdate().booleanValue() );
       }
 
       // Also, save the step-database relationship!
@@ -559,8 +450,8 @@ public class InsertUpdateMeta extends BaseStepMeta implements StepMetaInterface,
                 PKG, "InsertUpdateMeta.CheckResult.TableExists" ), stepMeta );
             remarks.add( cr );
 
-            for ( int i = 0; i < keyLookup.length; i++ ) {
-              String lufield = keyLookup[i];
+            for ( int i = 0; i < keyFields.length; i++ ) {
+              String lufield = keyFields[i].getKeyLookup();
 
               ValueMetaInterface v = r.searchValueMeta( lufield );
               if ( v == null ) {
@@ -589,8 +480,8 @@ public class InsertUpdateMeta extends BaseStepMeta implements StepMetaInterface,
             error_found = false;
             error_message = "";
 
-            for ( int i = 0; i < updateLookup.length; i++ ) {
-              String lufield = updateLookup[i];
+            for ( int i = 0; i < updateFields.length; i++ ) {
+              String lufield = updateFields[i].getUpdateLookup();
 
               ValueMetaInterface v = r.searchValueMeta( lufield );
               if ( v == null ) {
@@ -631,8 +522,8 @@ public class InsertUpdateMeta extends BaseStepMeta implements StepMetaInterface,
           error_message = "";
           boolean error_found = false;
 
-          for ( int i = 0; i < keyStream.length; i++ ) {
-            ValueMetaInterface v = prev.searchValueMeta( keyStream[i] );
+          for ( int i = 0; i < keyFields.length; i++ ) {
+            ValueMetaInterface v = prev.searchValueMeta( keyFields[i].getKeyStream() );
             if ( v == null ) {
               if ( first ) {
                 first = false;
@@ -640,12 +531,12 @@ public class InsertUpdateMeta extends BaseStepMeta implements StepMetaInterface,
                   BaseMessages.getString( PKG, "InsertUpdateMeta.CheckResult.MissingFieldsInInput" ) + Const.CR;
               }
               error_found = true;
-              error_message += "\t\t" + keyStream[i] + Const.CR;
+              error_message += "\t\t" + keyFields[i].getKeyStream() + Const.CR;
             }
           }
-          for ( int i = 0; i < keyStream2.length; i++ ) {
-            if ( keyStream2[i] != null && keyStream2[i].length() > 0 ) {
-              ValueMetaInterface v = prev.searchValueMeta( keyStream2[i] );
+          for ( int i = 0; i < keyFields.length; i++ ) {
+            if ( keyFields[i].getKeyStream2() != null && keyFields[i].getKeyStream2().length() > 0 ) {
+              ValueMetaInterface v = prev.searchValueMeta( keyFields[i].getKeyStream2() );
               if ( v == null ) {
                 if ( first ) {
                   first = false;
@@ -654,7 +545,7 @@ public class InsertUpdateMeta extends BaseStepMeta implements StepMetaInterface,
                       + Const.CR;
                 }
                 error_found = true;
-                error_message += "\t\t" + keyStream[i] + Const.CR;
+                error_message += "\t\t" + keyFields[i].getKeyStream() + Const.CR;
               }
             }
           }
@@ -672,8 +563,8 @@ public class InsertUpdateMeta extends BaseStepMeta implements StepMetaInterface,
           error_found = false;
           error_message = "";
 
-          for ( int i = 0; i < updateStream.length; i++ ) {
-            String lufield = updateStream[i];
+          for ( int i = 0; i < updateFields.length; i++ ) {
+            String lufield = updateFields[i].getUpdateStream();
 
             ValueMetaInterface v = prev.searchValueMeta( lufield );
             if ( v == null ) {
@@ -735,9 +626,26 @@ public class InsertUpdateMeta extends BaseStepMeta implements StepMetaInterface,
 
     if ( databaseMeta != null ) {
       if ( prev != null && prev.size() > 0 ) {
+        String[] keyLookupAsStringArray = new String[keyFields.length];
+        for ( int i = 0; i < keyFields.length; i++ ) {
+          keyLookupAsStringArray[i] = keyFields[i].getKeyLookup();
+        }
+        String[] keyStreamAsStringArray = new String[keyFields.length];
+        for ( int i = 0; i < keyFields.length; i++ ) {
+          keyStreamAsStringArray[i] = keyFields[i].getKeyStream();
+        }
+        String[] updateLookupAsStringArray = new String[updateFields.length];
+        for ( int i = 0; i < updateFields.length; i++ ) {
+          updateLookupAsStringArray[i] = updateFields[i].getUpdateLookup();
+        }
+        String[] updateStreamAsStringArray = new String[updateFields.length];
+        for ( int i = 0; i < updateFields.length; i++ ) {
+          updateStreamAsStringArray[i] = updateFields[i].getUpdateStream();
+        }
+
         // Copy the row
-        RowMetaInterface tableFields = RowMetaUtils.getRowMetaForUpdate( prev, keyLookup,
-            keyStream, updateLookup, updateStream );
+        RowMetaInterface tableFields = RowMetaUtils.getRowMetaForUpdate( prev, keyLookupAsStringArray,
+            keyStreamAsStringArray, updateLookupAsStringArray, updateStreamAsStringArray );
 
         if ( !Utils.isEmpty( tableName ) ) {
           Database db = new Database( loggingObject, databaseMeta );
@@ -751,10 +659,10 @@ public class InsertUpdateMeta extends BaseStepMeta implements StepMetaInterface,
             String cr_index = "";
             String[] idx_fields = null;
 
-            if ( keyLookup != null && keyLookup.length > 0 ) {
-              idx_fields = new String[keyLookup.length];
-              for ( int i = 0; i < keyLookup.length; i++ ) {
-                idx_fields[i] = keyLookup[i];
+            if ( keyFields != null && keyFields.length > 0 ) {
+              idx_fields = new String[keyFields.length];
+              for ( int i = 0; i < keyFields.length; i++ ) {
+                idx_fields[i] = keyFields[i].getKeyLookup();
               }
             } else {
               retval.setError( BaseMessages.getString( PKG, "InsertUpdateMeta.CheckResult.MissingKeyFields" ) );
@@ -797,25 +705,25 @@ public class InsertUpdateMeta extends BaseStepMeta implements StepMetaInterface,
       IMetaStore metaStore ) throws KettleStepException {
     if ( prev != null ) {
       // Lookup: we do a lookup on the natural keys
-      for ( int i = 0; i < keyLookup.length; i++ ) {
-        ValueMetaInterface v = prev.searchValueMeta( keyStream[i] );
+      for ( int i = 0; i < keyFields.length; i++ ) {
+        ValueMetaInterface v = prev.searchValueMeta( keyFields[i].getKeyStream() );
 
         DatabaseImpact ii =
             new DatabaseImpact(
             DatabaseImpact.TYPE_IMPACT_READ, transMeta.getName(), stepMeta.getName(), databaseMeta
-              .getDatabaseName(), tableName, keyLookup[i], keyStream[i],
+              .getDatabaseName(), tableName, keyFields[i].getKeyLookup(), keyFields[i].getKeyStream(),
             v != null ? v.getOrigin() : "?", "", "Type = " + v.toStringMeta() );
         impact.add( ii );
       }
 
       // Insert update fields : read/write
-      for ( int i = 0; i < updateLookup.length; i++ ) {
-        ValueMetaInterface v = prev.searchValueMeta( updateStream[i] );
+      for ( int i = 0; i < updateFields.length; i++ ) {
+        ValueMetaInterface v = prev.searchValueMeta( updateFields[i].getUpdateStream() );
 
         DatabaseImpact ii =
             new DatabaseImpact(
             DatabaseImpact.TYPE_IMPACT_READ_WRITE, transMeta.getName(), stepMeta.getName(), databaseMeta
-              .getDatabaseName(), tableName, updateLookup[i], updateStream[i], v != null
+              .getDatabaseName(), tableName, updateFields[i].getUpdateLookup(), updateFields[i].getUpdateStream(), v != null
               ? v.getOrigin() : "?", "", "Type = " + v.toStringMeta() );
         impact.add( ii );
       }
@@ -913,10 +821,19 @@ public class InsertUpdateMeta extends BaseStepMeta implements StepMetaInterface,
   }
 
   @Override public List<String> getDatabaseFields() {
+    String[] updateLookup = new String[updateFields.length];
+    for ( int i = 0; i < updateFields.length; i++ ) {
+      updateLookup[i] = updateFields[i].getUpdateLookup();
+    }
     return Arrays.asList( updateLookup );
   }
 
   @Override public List<String> getStreamFields() {
+
+    String[] updateStream = new String[updateFields.length];
+    for ( int i = 0; i < updateFields.length; i++ ) {
+      updateStream[i] = updateFields[i].getUpdateStream();
+    }
     return Arrays.asList( updateStream );
   }
 
@@ -926,15 +843,206 @@ public class InsertUpdateMeta extends BaseStepMeta implements StepMetaInterface,
    */
   @AfterInjection
   public void afterInjectionSynchronization() {
-    if ( keyStream == null || keyStream.length == 0 ) {
-      return;
+  }
+
+  public static class UpdateField implements Cloneable {
+    /** Field value to update after lookup */
+    @Injection( name = "UPDATE_LOOKUP", group = "UPDATES" )
+    private String updateLookup;
+
+    /** Stream name to update value with */
+    @Injection( name = "UPDATE_STREAM", group = "UPDATES" )
+    private String updateStream;
+
+    /** boolean indicating if field needs to be updated */
+    @Injection( name = "UPDATE_FLAG", group = "UPDATES" )
+    private Boolean update;
+
+    public String getUpdateLookup() {
+      return updateLookup;
     }
-    int nrFields = keyStream.length;
-    //PDI-16349
-    if ( keyStream2.length < nrFields ) {
-      String[] newKeyStream2 = new String[ nrFields ];
-      System.arraycopy( keyStream2, 0, newKeyStream2, 0, keyStream2.length );
-      keyStream2 = newKeyStream2;
+
+    public void setUpdateLookup( String updateLookup ) {
+      this.updateLookup = updateLookup;
+    }
+
+    public String getUpdateStream() {
+      return updateStream;
+    }
+
+    public void setUpdateStream( String updateStream ) {
+      this.updateStream = updateStream;
+    }
+
+    public Boolean getUpdate() {
+      return update;
+    }
+
+    public void setUpdate( Boolean update ) {
+      this.update = update;
+    }
+
+    public UpdateField() {
+      updateLookup = null;
+    }
+    @Override
+    public boolean equals( Object obj ) {
+      if ( this == obj ) {
+        return true;
+      }
+      if ( obj == null ) {
+        return false;
+      }
+      if ( getClass() != obj.getClass() ) {
+        return false;
+      }
+      KeyField other = (KeyField) obj;
+      if ( updateLookup == null ) {
+        if ( other.keyStream != null ) {
+          return false;
+        }
+      } else if ( !updateLookup.equals( other.keyStream ) ) {
+        return false;
+      }
+      if ( updateStream == null ) {
+        if ( other.keyLookup != null ) {
+          return false;
+        }
+      } else if ( !updateStream.equals( other.keyLookup ) ) {
+        return false;
+      }
+      if ( update == null ) {
+        if ( other.keyCondition != null ) {
+          return false;
+        }
+      } else if ( !update.equals( other.keyCondition ) ) {
+        return false;
+      }
+      return true;
+    }
+    @Override
+    public Object clone() {
+      try {
+        return (UpdateField) super.clone();
+      } catch ( CloneNotSupportedException e ) {
+        throw new RuntimeException( e );
+      }
+    }
+  }
+  public static class KeyField implements Cloneable {
+
+    /** which field in input stream to compare with? */
+    @Injection( name = "KEY_STREAM", group = "KEYS" )
+    private String keyStream;
+
+    /** field in table */
+    @Injection( name = "KEY_LOOKUP", group = "KEYS" )
+    private String keyLookup;
+
+    /** Comparator: =, <>, BETWEEN, ... */
+    @Injection( name = "KEY_CONDITION", group = "KEYS" )
+    private String keyCondition;
+
+    /** Extra field for between... */
+    @Injection( name = "KEY_STREAM2", group = "KEYS" )
+    private String keyStream2;
+
+    public KeyField() {
+      this.keyStream = null;
+    }
+
+    public String getKeyStream() {
+      return keyStream;
+    }
+
+    public void setKeyStream( String keyStream ) {
+      this.keyStream = keyStream;
+    }
+
+    public String getKeyLookup() {
+      return keyLookup;
+    }
+
+    public void setKeyLookup( String keyLookup ) {
+      this.keyLookup = keyLookup;
+    }
+
+    public String getKeyCondition() {
+      return keyCondition;
+    }
+
+    public void setKeyCondition( String keyCondition ) {
+      this.keyCondition = keyCondition;
+    }
+
+    public String getKeyStream2() {
+      return keyStream2;
+    }
+
+    public void setKeyStream2( String keyStream2 ) {
+      this.keyStream2 = keyStream2;
+    }
+
+    @Override
+    public int hashCode() {
+      final int prime = 31;
+      int result = 1;
+      result = prime * result + ( ( keyStream == null ) ? 0 : keyStream.hashCode() );
+      result = prime * result + ( ( keyLookup == null ) ? 0 : keyLookup.hashCode() );
+      result = prime * result + ( ( keyCondition == null ) ? 0 : keyCondition.hashCode() );
+      result = prime * result + ( ( keyStream2 == null ) ? 0 : keyStream2.hashCode() );
+      return result;
+    }
+    @Override
+    public boolean equals( Object obj ) {
+      if ( this == obj ) {
+        return true;
+      }
+      if ( obj == null ) {
+        return false;
+      }
+      if ( getClass() != obj.getClass() ) {
+        return false;
+      }
+      KeyField other = (KeyField) obj;
+      if ( keyStream == null ) {
+        if ( other.keyStream != null ) {
+          return false;
+        }
+      } else if ( !keyStream.equals( other.keyStream ) ) {
+        return false;
+      }
+      if ( keyLookup == null ) {
+        if ( other.keyLookup != null ) {
+          return false;
+        }
+      } else if ( !keyLookup.equals( other.keyLookup ) ) {
+        return false;
+      }
+      if ( keyCondition == null ) {
+        if ( other.keyCondition != null ) {
+          return false;
+        }
+      } else if ( !keyCondition.equals( other.keyCondition ) ) {
+        return false;
+      }
+      if ( keyStream2 == null ) {
+        if ( other.keyStream2 != null ) {
+          return false;
+        }
+      } else if ( !keyStream2.equals( other.keyStream2 ) ) {
+        return false;
+      }
+      return true;
+    }
+
+    @Override
+    public Object clone() {
+      try {
+        return (KeyField) super.clone();
+      } catch ( CloneNotSupportedException e ) {
+        throw new RuntimeException( e );
+      }
     }
   }
 }

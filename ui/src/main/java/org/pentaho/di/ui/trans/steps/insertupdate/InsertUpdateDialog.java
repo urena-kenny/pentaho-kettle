@@ -300,7 +300,7 @@ public class InsertUpdateDialog extends BaseStepDialog implements StepDialogInte
     wlKey.setLayoutData( fdlKey );
 
     int nrKeyCols = 4;
-    int nrKeyRows = ( input.getKeyStream() != null ? input.getKeyStream().length : 1 );
+    int nrKeyRows = ( input.getKeyFields() != null ? input.getKeyFields().length : 1 );
 
     ciKey = new ColumnInfo[nrKeyCols];
     ciKey[0] =
@@ -360,7 +360,7 @@ public class InsertUpdateDialog extends BaseStepDialog implements StepDialogInte
     wlReturn.setLayoutData( fdlReturn );
 
     int UpInsCols = 3;
-    int UpInsRows = ( input.getUpdateLookup() != null ? input.getUpdateLookup().length : 1 );
+    int UpInsRows = ( input.getUpdateFields() != null ? input.getUpdateFields().length : 1 );
 
     ciReturn = new ColumnInfo[UpInsCols];
     ciReturn[0] =
@@ -666,34 +666,34 @@ public class InsertUpdateDialog extends BaseStepDialog implements StepDialogInte
     wCommit.setText( input.getCommitSizeVar() );
     wUpdateBypassed.setSelection( input.isUpdateBypassed() );
 
-    if ( input.getKeyStream() != null ) {
-      for ( int i = 0; i < input.getKeyStream().length; i++ ) {
+    if ( input.getKeyFields() != null ) {
+      for ( int i = 0; i < input.getKeyFields().length; i++ ) {
         TableItem item = wKey.table.getItem( i );
-        if ( input.getKeyLookup()[i] != null ) {
-          item.setText( 1, input.getKeyLookup()[i] );
+        if ( input.getKeyFields()[i].getKeyLookup() != null ) {
+          item.setText( 1, input.getKeyFields()[i].getKeyLookup());
         }
-        if ( input.getKeyCondition()[i] != null ) {
-          item.setText( 2, input.getKeyCondition()[i] );
+        if ( input.getKeyFields()[i].getKeyCondition() != null ) {
+          item.setText( 2, input.getKeyFields()[i].getKeyCondition() );
         }
-        if ( input.getKeyStream()[i] != null ) {
-          item.setText( 3, input.getKeyStream()[i] );
+        if ( input.getKeyFields()[i].getKeyStream() != null ) {
+          item.setText( 3, input.getKeyFields()[i].getKeyStream() );
         }
-        if ( input.getKeyStream2()[i] != null ) {
-          item.setText( 4, input.getKeyStream2()[i] );
+        if ( input.getKeyFields()[i].getKeyStream2() != null ) {
+          item.setText( 4, input.getKeyFields()[i].getKeyStream2() );
         }
       }
     }
 
-    if ( input.getUpdateLookup() != null ) {
-      for ( int i = 0; i < input.getUpdateLookup().length; i++ ) {
+    if ( input.getUpdateFields() != null ) {
+      for ( int i = 0; i < input.getUpdateFields().length; i++ ) {
         TableItem item = wReturn.table.getItem( i );
-        if ( input.getUpdateLookup()[i] != null ) {
-          item.setText( 1, input.getUpdateLookup()[i] );
+        if ( input.getUpdateFields()[i].getUpdateLookup() != null ) {
+          item.setText( 1, input.getUpdateFields()[i].getUpdateLookup() );
         }
-        if ( input.getUpdateStream()[i] != null ) {
-          item.setText( 2, input.getUpdateStream()[i] );
+        if ( input.getUpdateFields()[i].getUpdateStream() != null ) {
+          item.setText( 2, input.getUpdateFields()[i].getUpdateStream() );
         }
-        if ( input.getUpdate()[i] == null || input.getUpdate()[i] ) {
+        if ( input.getUpdateFields()[i].getUpdate() == null || input.getUpdateFields()[i].getUpdate() ) {
           item.setText( 3, "Y" );
         } else {
           item.setText( 3, "N" );
@@ -744,10 +744,10 @@ public class InsertUpdateDialog extends BaseStepDialog implements StepDialogInte
     //CHECKSTYLE:Indentation:OFF
     for ( int i = 0; i < nrkeys; i++ ) {
       TableItem item = wKey.getNonEmpty( i );
-      inf.getKeyLookup()[i] = item.getText( 1 );
-      inf.getKeyCondition()[i] = item.getText( 2 );
-      inf.getKeyStream()[i] = item.getText( 3 );
-      inf.getKeyStream2()[i] = item.getText( 4 );
+      inf.getKeyFields()[i].setKeyLookup( item.getText( 1 ) );
+      inf.getKeyFields()[i].setKeyCondition( item.getText( 2 ) );
+      inf.getKeyFields()[i].setKeyStream( item.getText( 3 ) );
+      inf.getKeyFields()[i].setKeyStream2( item.getText( 4 ) );
     }
 
     // Table ftable = wReturn.table;
@@ -757,9 +757,9 @@ public class InsertUpdateDialog extends BaseStepDialog implements StepDialogInte
     }
     for ( int i = 0; i < nrfields; i++ ) {
       TableItem item = wReturn.getNonEmpty( i );
-      inf.getUpdateLookup()[i] = item.getText( 1 );
-      inf.getUpdateStream()[i] = item.getText( 2 );
-      inf.getUpdate()[i] = "Y".equals( item.getText( 3 ) );
+      inf.getUpdateFields()[i].setUpdateLookup( item.getText( 1 ) );
+      inf.getUpdateFields()[i].setUpdateStream(  item.getText( 2 ) );
+      inf.getUpdateFields()[i].setUpdate( "Y".equals( item.getText( 3 ) ) );
     }
 
     inf.setSchemaName( wSchema.getText() );

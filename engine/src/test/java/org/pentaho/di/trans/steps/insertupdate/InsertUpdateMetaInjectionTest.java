@@ -59,37 +59,37 @@ public class InsertUpdateMetaInjectionTest extends BaseMetadataInjectionTest<Ins
     } );
     check( "KEY_STREAM", new StringGetter() {
       public String get() {
-        return meta.getKeyStream()[0];
+        return meta.getKeyFields()[0].getKeyStream();
       }
     } );
     check( "KEY_LOOKUP", new StringGetter() {
       public String get() {
-        return meta.getKeyLookup()[0];
+        return meta.getKeyFields()[0].getKeyLookup();
       }
     } );
     check( "KEY_CONDITION", new StringGetter() {
       public String get() {
-        return meta.getKeyCondition()[0];
+        return meta.getKeyFields()[0].getKeyCondition();
       }
     } );
     check( "KEY_STREAM2", new StringGetter() {
       public String get() {
-        return meta.getKeyStream2()[0];
+        return meta.getKeyFields()[0].getKeyStream2();
       }
     } );
     check( "UPDATE_LOOKUP", new StringGetter() {
       public String get() {
-        return meta.getUpdateLookup()[0];
+        return meta.getUpdateFields()[0].getUpdateLookup();
       }
     } );
     check( "UPDATE_STREAM", new StringGetter() {
       public String get() {
-        return meta.getUpdateStream()[0];
+        return meta.getUpdateFields()[0].getUpdateStream();
       }
     } );
     check( "UPDATE_FLAG", new BooleanGetter() {
       public boolean get() {
-        return meta.getUpdate()[0];
+        return meta.getUpdateFields()[0].getUpdate();
       }
     } );
     skipPropertyTest( "CONNECTIONNAME" );

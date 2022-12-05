@@ -123,8 +123,18 @@ public class InsertUpdateMetaTest {
   @Test
   public void testProvidesModeler() throws Exception {
     InsertUpdateMeta insertUpdateMeta = new InsertUpdateMeta();
-    insertUpdateMeta.setUpdateLookup( new String[] {"f1", "f2", "f3"} );
-    insertUpdateMeta.setUpdateStream( new String[] {"s4", "s5", "s6"} );
+    InsertUpdateMeta.UpdateField[] updateFields = new InsertUpdateMeta.UpdateField[3];
+    updateFields[0] = new InsertUpdateMeta.UpdateField();
+
+    updateFields[0].setUpdateLookup( "f1" );
+    updateFields[1].setUpdateLookup( "f2" );
+    updateFields[2].setUpdateLookup( "f3" );
+
+    updateFields[0].setUpdateStream( "s4" );
+    updateFields[1].setUpdateStream( "s5" );
+    updateFields[0].setUpdateStream( "s6" );
+
+    insertUpdateMeta.setUpdateFields( updateFields );
 
     InsertUpdateData tableOutputData = new InsertUpdateData();
     tableOutputData.insertRowMeta = Mockito.mock( RowMeta.class );
@@ -244,13 +254,12 @@ public class InsertUpdateMetaTest {
       new InsertUpdate( mockHelper.stepMeta, mockHelper.stepDataInterface, 0, mockHelper.transMeta, mockHelper.trans );
     insertUpdateStep.setInputRowMeta( Mockito.mock( RowMetaInterface.class ) );
     insertUpdateStep = Mockito.spy( insertUpdateStep );
+    InsertUpdateMeta.KeyField[] keyFields = new InsertUpdateMeta.KeyField[1];
 
     InsertUpdateMeta insertUpdateMeta = new InsertUpdateMeta();
-    insertUpdateMeta.setKeyStream( new String[] { "test_field" } );
-    insertUpdateMeta.setKeyCondition( new String[] { "test_condition" } );
-    insertUpdateMeta.setKeyStream2( new String[] {} );
-    insertUpdateMeta.setUpdateLookup( new String[] {} );
-    insertUpdateMeta.setKeyLookup( new String[] {} );
+    keyFields[0].setKeyStream("test_field" );
+    keyFields[0].setKeyCondition( "test_condition");
+    insertUpdateMeta.setUpdateFields( new InsertUpdateMeta.UpdateField[] {} );
     insertUpdateMeta.setUpdateBypassed( true );
     insertUpdateMeta.setDatabaseMeta( Mockito.mock( DatabaseMeta.class ) );
     Database database = Mockito.mock( Database.class );
@@ -265,6 +274,6 @@ public class InsertUpdateMetaTest {
     //run without a exception
     insertUpdateStep.processRow( insertUpdateMeta, mockHelper.processRowsStepDataInterface );
 
-    Assert.assertEquals( insertUpdateMeta.getKeyStream().length, insertUpdateMeta.getKeyStream2().length );
+    Assert.assertEquals( insertUpdateMeta.getKeyFields().length, insertUpdateMeta.getKeyFields().length );
   }
 }
