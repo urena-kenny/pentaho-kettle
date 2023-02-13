@@ -124,6 +124,13 @@ case `uname -s` in
                             fi
 			;;
 
+		arm64)
+			if $($_PENTAHO_JAVA -version 2>&1 | grep "64-Bit" > /dev/null )
+                            then
+			  LIBPATH=$CURRENTDIR/../libswt/aarch_osx64/
+                            fi
+			;;
+
 		i[3-6]86)
 			LIBPATH=$CURRENTDIR/../libswt/osx/
 			;;
