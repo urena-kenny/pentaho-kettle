@@ -4,7 +4,7 @@ REM ****************************************************************************
 REM
 REM Pentaho Data Integration
 REM
-REM Copyright (C) 2005 - ${copyright.year} by Hitachi Vantara : http://www.hitachivantara.com
+REM Copyright (C) 2005 - 2022 by Hitachi Vantara : http://www.hitachivantara.com
 REM
 REM *****************************************************************************
 REM
@@ -80,7 +80,6 @@ FOR /F %%a IN ('java -version 2^>^&1^|%windir%\system32\find /C "version ""1.8."
 GOTO CHECK32VS64BITJAVA
 :CHECK32VS64BITJAVA
 
-
 IF %IS64BITJAVA% == 1 GOTO :USE64
 
 :USE32
@@ -102,17 +101,13 @@ for /f "tokens=4-7 delims=[.] " %%i in ('ver') do @(if %%i=="10.0" (set WINDOWS_
 
 REM Convert WINDOWS_BUILD_VERSION to a number
 set /A WINDOWS_BUILD_NUMBER=%WINDOWS_BUILD_VERSION%
-
+set ISWINDOWS11=
+set ISWINDOWS11ANDJAVA8=
 REM First build number of Windows 11 is 20000
-if %WINDOWS_BUILD_NUMBER% LSS 20000 GOTO :continueWithoutWindows11
-SET ISWINDOWS11=true
-:continueWithoutWindows11
+if NOT %WINDOWS_BUILD_NUMBER% LSS 20000 SET ISWINDOWS11=true
 
 if NOT %ISJAVA8% == 1 GOTO :CONTINUESCRIPT
-if "%ISWINDOWS11%"==true GOTO :CONTINUESCRIPT
-echo ERROR: Pentaho requires Java 11 to function on Windows 11
-pause
-GOTO :EOF
+if "%ISWINDOWS11%"==true SET ISWINDOWS11ANDJAVA8=true
 
 :CONTINUESCRIPT
 if NOT %ISJAVA8% == 1 GOTO :SETJAVASWT
@@ -168,7 +163,13 @@ set OPT=%OPT% %PENTAHO_DI_JAVA_OPTIONS% "-Djava.library.path=%LIBSPATH%;%HADOOP_
 REM ***************
 REM ** Run...    **
 REM ***************
-
+REM If this hasn't been set it's going to be for Spoon
+if NOT %STARTTITLE%!==! GOTO :NORMALSTART
+if %ISWINDOWS11ANDJAVA8%!==! GOTO :NORMALSTART
+echo ERROR: Spoon requires Java 11 to function on Windows 11
+pause
+GOTO :EOF
+:NORMALSTART
 if %STARTTITLE%!==! SET STARTTITLE="Spoon"
 REM Eventually call java instead of javaw and do not run in a separate window
 if not "%SPOON_CONSOLE%"=="1" set SPOON_START_OPTION=start %STARTTITLE%
