@@ -22,7 +22,7 @@ REM limitations under the License.
 REM
 REM *****************************************************************************
 
-setlocal 
+setlocal
 
 cd /D %~dp0
 
@@ -93,6 +93,32 @@ GOTO :CONTINUE
 REM ===========================================
 REM Using 64bit java, so include 64bit SWT Jar
 REM ===========================================
+REM ===========================================
+REM Check if running Windows 11
+REM ===========================================
+
+REM Check if the major version of Windows is 10.0 (Windows 10 or Windows 11). If it is save the build number
+for /f "tokens=4-7 delims=[.] " %%i in ('ver') do @(if %%i=="10.0" (set WINDOWS_BUILD_VERSION= ) else (set WINDOWS_BUILD_VERSION=%%k))
+
+REM Convert WINDOWS_BUILD_VERSION to a number
+set /A WINDOWS_BUILD_NUMBER=%WINDOWS_BUILD_VERSION%
+
+REM First build number of Windows 11 is 20000
+if %WINDOWS_BUILD_NUMBER% LSS 20000 GOTO :continueWithoutWindows11
+SET ISWINDOWS11=true
+:continueWithoutWindows11
+
+if NOT %ISJAVA8% == 1 GOTO :CONTINUESCRIPT
+if NOT "%ISWINDOWS11%"==true GOTO :CONTINUESCRIPT
+echo Pentaho requires Java 11 to function on Windows 11
+exit \B 2
+
+:CONTINUESCRIPT
+if NOT %ISJAVA8% == 1 GOTO :SETJAVASWT
+set LIBSPATH=libswt\win64_java8
+set SWTJAR=..\libswt\win64_java8
+if %ISJAVA8% == 1 GOTO :CONTINUE
+:SETJAVASWT
 set LIBSPATH=libswt\win64
 set SWTJAR=..\libswt\win64
 :CONTINUE
