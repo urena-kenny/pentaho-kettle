@@ -109,9 +109,10 @@ SET ISWINDOWS11=true
 :continueWithoutWindows11
 
 if NOT %ISJAVA8% == 1 GOTO :CONTINUESCRIPT
-if NOT "%ISWINDOWS11%"==true GOTO :CONTINUESCRIPT
-echo Pentaho requires Java 11 to function on Windows 11
-exit \B 2
+if "%ISWINDOWS11%"==true GOTO :CONTINUESCRIPT
+echo ERROR: Pentaho requires Java 11 to function on Windows 11
+pause
+GOTO :EOF
 
 :CONTINUESCRIPT
 if NOT %ISJAVA8% == 1 GOTO :SETJAVASWT
@@ -176,3 +177,4 @@ if not "%SPOON_CONSOLE%"=="1" set SPOON_START_OPTION=start %STARTTITLE%
 %SPOON_START_OPTION% "%_PENTAHO_JAVA%" %JAVA_ADD_OPENS% %OPT% -jar launcher\launcher.jar -lib ..\%LIBSPATH% %_cmdline%
 @echo off
 if "%SPOON_PAUSE%"=="1" pause
+:EOF
