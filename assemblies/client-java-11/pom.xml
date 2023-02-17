@@ -60,12 +60,6 @@
       <version>${oss-licenses.version}</version>
       <type>zip</type>
     </dependency>
-    <dependency>
-      <groupId>org.pentaho.di</groupId>
-      <artifactId>pdi-ce</artifactId>
-      <version>9.5.0.0-SNAPSHOT</version>
-      <type>zip</type>
-    </dependency>
     <!-- swt -->
     <dependency>
       <groupId>org.eclipse.platform</groupId>
@@ -185,6 +179,35 @@
       </dependencies>
       <build>
         <plugins>
+          <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-dependency-plugin</artifactId>
+          <version>2.1</version>
+          <executions>
+            <execution>
+              <id>copy-model</id>
+              <phase>package</phase>
+              <goals>
+                <goal>copy</goal>
+              </goals>
+              <configuration>
+
+                <artifactItems>
+                  <artifactItem>
+                    <groupId>org.eclipse.platform</groupId>
+                    <artifactId>org.eclipse.swt.win32.win32.x86_64</artifactId>
+                    <version>3.115.0</version>
+                    <includes>org.eclipse.swt.win32.win32.x86_64.jar</includes>
+                    <type>jar</type>
+                    <destFileName>swt.jar</destFileName>
+                  </artifactItem>
+                </artifactItems>
+
+                <outputDirectory>${java.io.tmpdir}/libswt_temp</outputDirectory>
+              </configuration>
+            </execution>
+          </executions>
+          </plugin>
           <plugin>
             <artifactId>maven-assembly-plugin</artifactId>
             <executions>

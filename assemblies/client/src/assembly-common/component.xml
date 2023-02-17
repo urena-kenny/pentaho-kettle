@@ -2,6 +2,14 @@
   <fileSets>
     <!-- the staging dir -->
     <fileSet>
+      <directory>${java.io.tmpdir}/libswt_temp</directory>
+      <outputDirectory>./libswt/win64_java8</outputDirectory>
+      <includes>
+        <include>swt.jar</include>
+      </includes>
+      <fileMode>0600</fileMode>
+    </fileSet>
+    <fileSet>
       <directory>${assembly.dir}</directory>
       <outputDirectory>.</outputDirectory>
     </fileSet>
