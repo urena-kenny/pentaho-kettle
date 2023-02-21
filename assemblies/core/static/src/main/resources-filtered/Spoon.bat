@@ -4,7 +4,7 @@ REM ****************************************************************************
 REM
 REM Pentaho Data Integration
 REM
-REM Copyright (C) 2005 - 2022 by Hitachi Vantara : http://www.hitachivantara.com
+REM Copyright (C) 2005 - ${copyright.year} by Hitachi Vantara : http://www.hitachivantara.com
 REM
 REM *****************************************************************************
 REM
