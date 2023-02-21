@@ -130,7 +130,7 @@ case `uname -s` in
         echo "I'm sorry, this Mac platform [$ARCH] is not supported in Java 8"
         exit
                             else
-        LIBPATH=$CURRENTDIR/../libswt/aarch_osx64/
+        LIBPATH=$CURRENTDIR/../libswt/osx64_aarch/
                             fi
       ;;
 
