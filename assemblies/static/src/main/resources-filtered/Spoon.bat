@@ -101,19 +101,18 @@ for /f "tokens=4-7 delims=[.] " %%i in ('ver') do @(if %%i=="10.0" (set WINDOWS_
 
 REM Convert WINDOWS_BUILD_VERSION to a number
 set /A WINDOWS_BUILD_NUMBER=%WINDOWS_BUILD_VERSION%
-set ISWINDOWS11=
-set ISWINDOWS11ANDJAVA8=
-REM First build number of Windows 11 is 20000
-if NOT %WINDOWS_BUILD_NUMBER% LSS 20000 SET ISWINDOWS11=true
 
-if NOT %ISJAVA8% == 1 GOTO :CONTINUESCRIPT
-if "%ISWINDOWS11%"==true SET ISWINDOWS11ANDJAVA8=true
+set ISWINDOWS11ANDJAVA8=""
+REM First build number of Windows 11 is 20000, if the number is less than that it's not Windows 11
+if %WINDOWS_BUILD_NUMBER% LSS 20000 GOTO :ISNOTWINDOWS11ANDJAVA8
+if %ISJAVA8% NEQ 1 GOTO :ISNOTWINDOWS11ANDJAVA8
+SET ISWINDOWS11ANDJAVA8=true
 
-:CONTINUESCRIPT
-if NOT %ISJAVA8% == 1 GOTO :SETJAVASWT
+:ISNOTWINDOWS11ANDJAVA8
+if %ISJAVA8% NEQ 1 GOTO :SETJAVASWT
 set LIBSPATH=libswt\win64_java8
 set SWTJAR=..\libswt\win64_java8
-if %ISJAVA8% == 1 GOTO :CONTINUE
+GOTO :CONTINUE
 :SETJAVASWT
 set LIBSPATH=libswt\win64
 set SWTJAR=..\libswt\win64
@@ -163,10 +162,11 @@ set OPT=%OPT% %PENTAHO_DI_JAVA_OPTIONS% "-Djava.library.path=%LIBSPATH%;%HADOOP_
 REM ***************
 REM ** Run...    **
 REM ***************
-REM If this hasn't been set it's going to be for Spoon
-if NOT %STARTTITLE%!==! GOTO :NORMALSTART
-if %ISWINDOWS11ANDJAVA8%!==! GOTO :NORMALSTART
-echo ERROR: Spoon requires Java 11 to function on Windows 11
+REM If %STARTTITLE% is set, start Spoon even if it is Windows 8 on Windows 11
+if NOT "%STARTTITLE%"=="" GOTO :NORMALSTART
+REM IF %ISWINDOWS11ANDJAVA8% is not set, start normally
+if %ISWINDOWS11ANDJAVA8%=="" GOTO :NORMALSTART
+echo ERROR: Spoon's User Interface requires Java 11 to function on Windows 11
 pause
 GOTO :EOF
 :NORMALSTART
