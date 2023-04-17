@@ -56,13 +56,19 @@ public class ConnectionLifecycleListener implements LifecycleListener {
   private MetastoreLocator metastoreLocator;
 
   public ConnectionLifecycleListener() {
-    try {
-      Collection<MetastoreLocator> metastoreLocators = PluginServiceLoader.loadServices( MetastoreLocator.class );
-      metastoreLocator = metastoreLocators.stream().findFirst().get();
-    } catch ( Exception e ) {
-      logger.error( "Error getting MetastoreLocator", e );
-      throw new IllegalStateException( e );
+  }
+
+  protected MetastoreLocator getMetastoreLocator() {
+    if ( this.metastoreLocator == null ) {
+      try {
+        Collection<MetastoreLocator> metastoreLocators = PluginServiceLoader.loadServices( MetastoreLocator.class );
+        this.metastoreLocator = metastoreLocators.stream().findFirst().get();
+      } catch ( Exception e ) {
+        logger.error( "Error getting MetastoreLocator", e );
+        throw new IllegalStateException( e );
+      }
     }
+    return this.metastoreLocator;
   }
 
   @Override
@@ -70,8 +76,8 @@ public class ConnectionLifecycleListener implements LifecycleListener {
     Spoon spoon = spoonSupplier.get();
     if ( spoon != null ) {
       spoon.getTreeManager()
-        .addTreeProvider( Spoon.STRING_TRANSFORMATIONS, new ConnectionFolderProvider( metastoreLocator ) );
-      spoon.getTreeManager().addTreeProvider( Spoon.STRING_JOBS, new ConnectionFolderProvider( metastoreLocator ) );
+        .addTreeProvider( Spoon.STRING_TRANSFORMATIONS, new ConnectionFolderProvider( getMetastoreLocator() ) );
+      spoon.getTreeManager().addTreeProvider( Spoon.STRING_JOBS, new ConnectionFolderProvider( getMetastoreLocator() ) );
     }
     connectionManagerSupplier.get()
       .addConnectionProvider( OtherConnectionDetailsProvider.SCHEME, new OtherConnectionDetailsProvider() );
